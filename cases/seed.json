@@ -1,0 +1,31 @@
+{
+  "cases": [
+    {
+      "case_id": "T3-5GKZ-10:T3-H-558f",
+      "issue_type": "SCORING",
+      "expected_label": "DERIVED_FROM_PROFILE",
+      "human_note": "T3-H-558s/x/f 来自 BH400*200*7*10 型钢拆板加工板，不应判为 Tekla 独立零件缺失。",
+      "evidence_fields": [
+        "profile",
+        "position_suffix",
+        "derived_parent",
+        "match_method"
+      ]
+    },
+    {
+      "case_id": "T3-5GKZ-10:box-column-main-material-segments",
+      "issue_type": "DATA",
+      "expected_label": "BOX_COLUMN_MAIN_MATERIAL_SEGMENT_GROUP",
+      "human_note": "人工确认 T3-5GKZ-10 中 T3-P-4917、T3-P-4918、T3-P-4919、T3-P-6272、T3-P-5577、T3-P-6269、T3-P-6268、T3-P-5571、T3-P-6284、T3-P-6271、T3-P-5579、T3-P-5576、T3-P-6270 都是同一类柱主材，属于柱子的主材分段模型。",
+      "evidence_fields": [
+        "member_id",
+        "confirmed_segment_positions",
+        "part_role",
+        "manufacturing_scope_issue_type",
+        "model_scope"
+      ]
+    }
+  ]
+}
+
+

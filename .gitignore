@@ -1,0 +1,24 @@
+# Generated caches and analysis outputs
+cache/
+outputs/
+
+# Python build/test artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Local Tekla/Excel working files
+*.xls
+*.xlsx
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

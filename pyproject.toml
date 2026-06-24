@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zijinhua-tekla"
+version = "0.1.0"
+description = "Tekla processing recognition helpers for Zijinhua workflows"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
