@@ -115,8 +115,9 @@ def _classify_station_type(
     normal_axes = {_normal_axis(part) for part in active_parts}
     has_cross_core = "X" in normal_axes and "Y" in normal_axes
     has_outer_flange = any(_is_outer_offset(part) for part in active_parts)
+    station = float(station_loop.get("station") or 0.0)
     has_box_forming = sum(1 for part in active_parts if _is_box_forming_candidate(part)) >= 2
-    if has_cross_core and has_box_forming:
+    if has_cross_core and has_box_forming and station > 0:
         return CompositeSegmentType.CROSS_TO_BOX_TRANSITION
     if has_cross_core and has_outer_flange:
         return CompositeSegmentType.CROSS_CORE_WITH_FLANGES
@@ -141,6 +142,8 @@ def _merge_snapshots_into_segments(
         station_end = last.station
         if index < len(snapshots):
             station_end = snapshots[index].station
+        else:
+            station_end = max(_member_axis_length(assembly), _max_candidate_station_end(assembly), last.station)
         result.append(
             CompositeMainMaterialSegment(
                 assembly_id=assembly_id,
@@ -155,6 +158,23 @@ def _merge_snapshots_into_segments(
         )
         group_start = index
     return result
+
+
+def _member_axis_length(assembly: dict[str, Any]) -> float:
+    return float(
+        assembly.get("metadata", {})
+        .get("memberAxisEvidence", {})
+        .get("length")
+        or 0.0
+    )
+
+
+def _max_candidate_station_end(assembly: dict[str, Any]) -> float:
+    station_ends = []
+    for part in assembly.get("parts", []):
+        if _is_main_candidate(part):
+            station_ends.append(float(part.get("mainMaterialEvidence", {}).get("axisStationEnd") or 0.0))
+    return max(station_ends, default=0.0)
 
 
 def _is_main_candidate(part: dict[str, Any]) -> bool:
@@ -191,9 +211,17 @@ def _is_outer_offset(part: dict[str, Any]) -> bool:
 
 
 def _is_box_forming_candidate(part: dict[str, Any]) -> bool:
-    if not _is_main_candidate(part):
+    if not _is_main_candidate(part) or not _is_outer_offset(part):
         return False
     evidence = part.get("mainMaterialEvidence", {})
-    start = float(evidence.get("axisStationStart") or 0.0)
     length = float(evidence.get("axisStationLength") or 0.0)
-    return start > 0 and (_is_outer_offset(part) or length >= 1000)
+    return length >= 1000 and _has_box_section_projection_evidence(part)
+
+
+def _has_box_section_projection_evidence(part: dict[str, Any]) -> bool:
+    projection = part.get("mainMaterialEvidence", {}).get("sectionProjectionEvidence", {})
+    bounds_min = projection.get("projectedBoundsMin", {})
+    bounds_max = projection.get("projectedBoundsMax", {})
+    span_u = abs(float(bounds_max.get("u") or 0.0) - float(bounds_min.get("u") or 0.0))
+    span_v = abs(float(bounds_max.get("v") or 0.0) - float(bounds_min.get("v") or 0.0))
+    return max(span_u, span_v) >= 400

@@ -68,22 +68,40 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
         self.assertEqual([(0, 3000), (3000, 4500), (4500, 8000)], [
             (segment.station_start, segment.station_end) for segment in segments
         ])
+        self.assertEqual([[], [], []], [segment.main_plates for segment in segments])
+
+    def test_uses_member_axis_length_for_last_segment_end_when_terminal_station_missing(self):
+        assembly = _composite_fixture(include_terminal_box_station=False)
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        self.assertEqual((4500, 8000), (segments[-1].station_start, segments[-1].station_end))
+        self.assertEqual("BOX_CLOSED_SECTION", segments[-1].segment_type.value)
+
+    def test_transition_does_not_require_box_forming_parts_to_start_after_zero(self):
+        assembly = _composite_fixture(box_parts_start=0)
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        self.assertEqual("CROSS_TO_BOX_TRANSITION", segments[1].segment_type.value)
 
 
-def _composite_fixture():
+def _composite_fixture(include_terminal_box_station=True, box_parts_start=3000):
+    station_loops = [
+        _station_loop(0, "cross"),
+        _station_loop(1500, "cross"),
+        _station_loop(3000, "transition"),
+        _station_loop(4500, "box"),
+    ]
+    if include_terminal_box_station:
+        station_loops.append(_station_loop(8000, "box"))
     return {
         "assemblyId": "A-COMPOSITE",
         "metadata": {
             "memberAxisEvidence": {"length": 8000},
             "boxSectionEvidence": {
                 "source": "teklaSolidFaceSectionSegments.v2",
-                "stationLoops": [
-                    _station_loop(0, "cross"),
-                    _station_loop(1500, "cross"),
-                    _station_loop(3000, "transition"),
-                    _station_loop(4500, "box"),
-                    _station_loop(8000, "box"),
-                ],
+                "stationLoops": station_loops,
             },
         },
         "parts": [
@@ -91,8 +109,8 @@ def _composite_fixture():
             _part("core-y", "P-CORE-Y", 0, 4500, "Y", 0, 0, 300, 20),
             _part("flange-l", "P-FLANGE-L", 0, 3000, "X", -220, 0, 20, 220),
             _part("flange-r", "P-FLANGE-R", 0, 3000, "X", 220, 0, 20, 220),
-            _part("box-a", "P-BOX-A", 3000, 8000, "X", -260, 0, 20, 520),
-            _part("box-b", "P-BOX-B", 3000, 8000, "X", 260, 0, 20, 520),
+            _part("box-a", "P-BOX-A", box_parts_start, 8000, "X", -260, 0, 20, 520),
+            _part("box-b", "P-BOX-B", box_parts_start, 8000, "X", 260, 0, 20, 520),
             _part("box-c", "P-BOX-C", 4500, 8000, "Y", 0, -260, 520, 20),
             _part("box-d", "P-BOX-D", 4500, 8000, "Y", 0, 260, 520, 20),
         ],
