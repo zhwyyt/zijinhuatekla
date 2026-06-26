@@ -4,6 +4,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from shapely.geometry import LineString, Polygon
+from shapely.ops import polygonize, unary_union
+
 from ..box_section import classify_box_section_evidence
 from ..rules import as_float, text
 
@@ -61,7 +64,9 @@ def classify_box_main_material_segment_groups(
     )
     relationship_edges = _relationship_edges(assembly)
     box_section_evidence = classify_box_section_evidence(assembly)
-    section_groups = _section_sample_groups(assembly_id, candidate_parts, relationship_edges, member)
+    section_groups = _box_section_topology_seed_groups(assembly_id, assembly, candidate_parts, relationship_edges)
+    if not section_groups:
+        section_groups = _section_sample_groups(assembly_id, candidate_parts, relationship_edges, member)
     if section_groups:
         expanded_group = _expanded_wall_trace_group(
             assembly_id,
@@ -169,11 +174,13 @@ def _expanded_wall_trace_group(
         return None
     base = _group_from_parts(assembly_id, parts, relationship_edges, 0)
     evidence_summary = dict(base.evidence_summary)
+    for group in section_groups:
+        evidence_summary.update(group.evidence_summary)
     evidence_summary["trace_seed_part_ids"] = ";".join(sorted(seed_ids))
     evidence_summary["trace_seed_part_positions"] = ";".join(_unique_values(part.get("partPosition") for part in parts if text(part.get("partId")) in seed_ids))
     evidence_summary["confirmed_segment_positions_used"] = ";".join(sorted(confirmed_segment_positions))
     evidence_summary["axis_trace_union_gaps"] = _axis_union_gap_summary(parts)
-    evidence_codes = [
+    evidence_codes = [code for group in section_groups for code in group.evidence_codes] + [
         "BOX_WALL_TRACE_SEED",
         "BOX_OUTER_WALL_TRACE_CONFIRMED",
         "AXIS_CONTINUITY_EXPANDED",
@@ -290,9 +297,11 @@ def _is_unsampled_body_wall_candidate(
 ) -> bool:
     if text(part.get("partPosition")) in confirmed_segment_positions:
         return True
+    if part.get("mainMaterialEvidence", {}).get("isBodyWallPlateCandidate") is not True:
+        return False
     part_id = text(part.get("partId"))
     member_role = _member_part_role(member, part_id)
-    if member_role == "wall_candidate":
+    if member_role in {"wall_candidate", "flange_candidate", "web_candidate"}:
         return True
     name = text(part.get("name")).upper()
     if name == "COLUMN":
@@ -307,6 +316,215 @@ def _member_part_role(member: dict[str, Any] | None, part_id: str) -> str:
         if text(role.get("PartId")) == part_id:
             return text(role.get("Role"))
     return ""
+def _box_section_topology_seed_groups(
+    assembly_id: str,
+    assembly: dict[str, Any],
+    candidate_parts: list[dict[str, Any]],
+    relationship_edges: set[tuple[str, str]],
+) -> list[BoxMainMaterialSegmentGroup]:
+    seed_ids = _box_section_topology_seed_part_ids(assembly, candidate_parts)
+    if not seed_ids:
+        return []
+    role_parts = [part for part in candidate_parts if text(part.get("partId")) in seed_ids]
+    role_parts = sorted(
+        role_parts,
+        key=lambda part: (_station_start(part), _station_end(part), text(part.get("partPosition")), text(part.get("partId"))),
+    )
+    if not role_parts:
+        return []
+    group = _group_from_parts(assembly_id, role_parts, relationship_edges, 0)
+    evidence_codes = [
+        code
+        for code in group.evidence_codes
+        if code not in {"BODY_FACE_BUCKET_AUXILIARY", "SAME_BODY_FACE_BUCKET"}
+    ]
+    evidence_codes.extend([
+        "BOX_SECTION_LOOP_TOPOLOGY_SEED",
+        "BOX_OUTER_WALL_TRACE_CONFIRMED",
+        "SECTION_SAMPLES_OVERRIDE_RADIAL_BUCKET",
+        "SECTION_VALIDATED",
+        "THICKNESS_AUXILIARY_ONLY",
+    ])
+    evidence_summary = dict(group.evidence_summary)
+    evidence_summary["section_role_hint"] = "box_section_topology"
+    evidence_summary["box_section_seed_part_ids"] = ";".join(sorted(seed_ids))
+    return [
+        BoxMainMaterialSegmentGroup(
+            assembly_id=group.assembly_id,
+            group_type=group.group_type,
+            face_id="SECTION_BOX_TOPOLOGY",
+            part_ids=group.part_ids,
+            part_positions=group.part_positions,
+            station_ranges=group.station_ranges,
+            gap_summary=group.gap_summary,
+            continuity_level=_role_continuity(role_parts),
+            evidence_codes=_dedupe(evidence_codes),
+            confidence=max(group.confidence, _role_confidence(role_parts)),
+            issue_category="",
+            evidence_summary=evidence_summary,
+        )
+    ]
+
+
+def _box_section_topology_seed_part_ids(assembly: dict[str, Any], candidate_parts: list[dict[str, Any]]) -> set[str]:
+    metadata = assembly.get("metadata", {})
+    evidence = metadata.get("boxSectionEvidence", {}) if isinstance(metadata, dict) else {}
+    station_loops = evidence.get("stationLoops", []) if isinstance(evidence, dict) else []
+    if not isinstance(station_loops, list):
+        return set()
+    seed_candidate_ids = _long_axis_wall_seed_candidate_ids(assembly, candidate_parts)
+    if not seed_candidate_ids:
+        return set()
+    best_ids: set[str] = set()
+    best_score = 0.0
+    for station in station_loops:
+        if not isinstance(station, dict):
+            continue
+        part_polygons: dict[str, list[Polygon]] = {}
+        for part_loop in station.get("partLoops", []) or []:
+            if not isinstance(part_loop, dict):
+                continue
+            part_id = text(part_loop.get("partId"))
+            if not part_id or part_id not in seed_candidate_ids:
+                continue
+            polygons = _polygons_from_section_loop(part_loop.get("sectionLoops"))
+            if not polygons:
+                polygons = _polygons_from_section_segments(part_loop.get("segments"))
+            if polygons:
+                part_polygons.setdefault(part_id, []).extend(polygons)
+        seed_ids, score = _outer_shell_part_ids(part_polygons)
+        if score > best_score and seed_ids:
+            best_score = score
+            best_ids = seed_ids
+    return best_ids
+
+
+def _long_axis_wall_seed_candidate_ids(assembly: dict[str, Any], candidate_parts: list[dict[str, Any]]) -> set[str]:
+    axis_length = as_float(assembly.get("metadata", {}).get("memberAxisEvidence", {}).get("length"))
+    if axis_length <= 0:
+        axis_length = max((_station_end(part) - _station_start(part) for part in candidate_parts), default=0.0)
+    result = set()
+    for part in candidate_parts:
+        part_id = text(part.get("partId"))
+        if not part_id:
+            continue
+        station_length = max(0.0, _station_end(part) - _station_start(part))
+        if axis_length > 0 and station_length < max(800.0, axis_length * 0.45):
+            continue
+        normal_magnitude = _normal_projection_magnitude(part)
+        if normal_magnitude > 0 and normal_magnitude < 0.65:
+            continue
+        result.add(part_id)
+    return result
+
+
+def _normal_projection_magnitude(part: dict[str, Any]) -> float:
+    evidence = part.get("mainMaterialEvidence", {})
+    projection = evidence.get("sectionProjectionEvidence", {}) if isinstance(evidence, dict) else {}
+    return as_float(projection.get("normalProjectionMagnitude")) if isinstance(projection, dict) else 0.0
+
+def _outer_shell_part_ids(part_polygons: dict[str, list[Polygon]]) -> tuple[set[str], float]:
+    if not part_polygons:
+        return set(), 0.0
+    polygons = [polygon for values in part_polygons.values() for polygon in values]
+    wall_union = unary_union(polygons)
+    body = _largest_polygon(wall_union)
+    if body is None:
+        return set(), 0.0
+    minx, miny, maxx, maxy = body.bounds
+    span = max(maxx - minx, maxy - miny)
+    if span > 0:
+        repair_distance = max(2.0, span * 0.02)
+        repaired = wall_union.buffer(repair_distance, join_style=2).buffer(-repair_distance, join_style=2)
+        repaired_body = _largest_polygon(repaired)
+        if repaired_body is not None and repaired_body.area >= body.area:
+            body = repaired_body
+    boundary = body.boundary
+    seed_ids = set()
+    for part_id, values in part_polygons.items():
+        if any(polygon.boundary.intersection(boundary).length > 1e-6 for polygon in values):
+            seed_ids.add(part_id)
+    return seed_ids, body.area
+
+
+def _polygons_from_section_loop(section_loops: Any) -> list[Polygon]:
+    polygons = []
+    if not isinstance(section_loops, list):
+        return polygons
+    for section_loop in section_loops:
+        if not isinstance(section_loop, dict):
+            continue
+        if section_loop.get("isClosed") is False or section_loop.get("isValid") is False:
+            continue
+        polygon = _usable_polygon(_parse_loop_points(section_loop.get("points")))
+        if polygon is not None:
+            polygons.append(polygon)
+    return polygons
+
+
+def _polygons_from_section_segments(segments: Any) -> list[Polygon]:
+    if not isinstance(segments, list):
+        return []
+    lines = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        start = _parse_section_point(segment.get("start"))
+        end = _parse_section_point(segment.get("end"))
+        if start is None or end is None or start == end:
+            continue
+        lines.append(LineString([start, end]))
+    return [polygon for polygon in (_usable_polygon(_polygon_points(item)) for item in polygonize(lines)) if polygon is not None]
+
+
+def _parse_loop_points(value: Any) -> list[tuple[float, float]]:
+    if not isinstance(value, list):
+        return []
+    points = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        if "u" in item or "v" in item:
+            points.append((as_float(item.get("u")), as_float(item.get("v"))))
+        elif "X" in item or "Y" in item:
+            points.append((as_float(item.get("X")), as_float(item.get("Y"))))
+        elif "x" in item or "y" in item:
+            points.append((as_float(item.get("x")), as_float(item.get("y"))))
+    return points
+
+
+def _parse_section_point(value: Any) -> tuple[float, float] | None:
+    if not isinstance(value, dict):
+        return None
+    return (as_float(value.get("u")), as_float(value.get("v")))
+
+
+def _usable_polygon(points: list[tuple[float, float]]) -> Polygon | None:
+    if len(points) < 3:
+        return None
+    polygon = Polygon(points)
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
+    if polygon.is_empty or polygon.area <= 1e-6:
+        return None
+    return polygon
+
+
+def _largest_polygon(geometry: Any) -> Polygon | None:
+    if isinstance(geometry, Polygon):
+        return geometry
+    if hasattr(geometry, "geoms"):
+        polygons = [item for item in geometry.geoms if isinstance(item, Polygon) and item.area > 1e-6]
+        return max(polygons, key=lambda polygon: polygon.area) if polygons else None
+    return None
+
+
+def _polygon_points(polygon: Polygon) -> list[tuple[float, float]]:
+    coords = list(polygon.exterior.coords)
+    if coords and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    return [(float(u), float(v)) for u, v in coords]
+
 def _section_sample_groups(
     assembly_id: str,
     candidate_parts: list[dict[str, Any]],
@@ -532,6 +750,9 @@ def _infer_profile_family(assembly: dict[str, Any]) -> str:
 def _classify_h_or_gl_main_material_groups(assembly: dict[str, Any], family: str) -> list[BoxMainMaterialSegmentGroup]:
     assembly_id = text(assembly.get("assemblyId"))
     relationship_edges = _relationship_edges(assembly)
+    slice_groups = _h_gl_station_slice_main_plate_groups(assembly_id, assembly, relationship_edges, family)
+    if slice_groups:
+        return slice_groups
     role_parts: dict[str, list[dict[str, Any]]] = {"TOP_FLANGE": [], "WEB": [], "BOTTOM_FLANGE": []}
     for part in assembly.get("parts", []):
         role = _h_or_gl_part_role(part)
@@ -570,6 +791,114 @@ def _classify_h_or_gl_main_material_groups(assembly: dict[str, Any], family: str
     return groups
 
 
+def _h_gl_station_slice_main_plate_groups(
+    assembly_id: str,
+    assembly: dict[str, Any],
+    relationship_edges: set[tuple[str, str]],
+    family: str,
+) -> list[BoxMainMaterialSegmentGroup]:
+    evidence = assembly.get("metadata", {}).get("hBeamSectionEvidence", {})
+    frames = evidence.get("stationFrames", []) if isinstance(evidence, dict) else []
+    if not isinstance(frames, list) or not frames:
+        return []
+    parts_by_id = {text(part.get("partId")): part for part in assembly.get("parts", []) if text(part.get("partId"))}
+    stats: dict[str, dict[str, Any]] = {}
+    all_stations: list[float] = []
+    for frame in frames:
+        if not isinstance(frame, dict):
+            continue
+        station = as_float(frame.get("station"))
+        all_stations.append(station)
+        for part_slice in frame.get("partSlices", []) or []:
+            if not isinstance(part_slice, dict):
+                continue
+            part_id = text(part_slice.get("partId"))
+            if not part_id or not _h_gl_slice_has_section_loop(part_slice):
+                continue
+            item = stats.setdefault(
+                part_id,
+                {"stations": [], "loop_count": 0, "segment_count": 0, "role_hints": set(), "part_position": text(part_slice.get("partPosition"))},
+            )
+            item["stations"].append(station)
+            item["loop_count"] += len(part_slice.get("sectionLoops") or [])
+            item["segment_count"] += len(part_slice.get("segments") or [])
+            role_hint = text(part_slice.get("roleHint"))
+            if role_hint:
+                item["role_hints"].add(role_hint)
+            if not item["part_position"]:
+                item["part_position"] = text(part_slice.get("partPosition"))
+    station_axis_length = _station_span(all_stations)
+    metadata_axis_length = as_float(assembly.get("metadata", {}).get("memberAxisEvidence", {}).get("length"))
+    axis_length = max(station_axis_length, metadata_axis_length)
+    groups: list[BoxMainMaterialSegmentGroup] = []
+    for part_id, item in stats.items():
+        stations = sorted(set(item["stations"]))
+        if len(stations) < 3:
+            continue
+        span = _station_span(stations)
+        coverage_ratio = span / axis_length if axis_length > 0 else 0.0
+        role_hints = {text(role) for role in item["role_hints"]}
+        if role_hints and role_hints.isdisjoint({"flange_candidate", "web_candidate"}):
+            continue
+        if span < 1800.0 or coverage_ratio < 0.50:
+            continue
+        part = parts_by_id.get(part_id, {"partId": part_id, "partPosition": item["part_position"]})
+        group = _group_from_parts(assembly_id, [part], relationship_edges, 0)
+        evidence_summary = dict(group.evidence_summary)
+        evidence_summary["main_material_role"] = _h_gl_slice_role(role_hints)
+        evidence_summary["profile_family"] = family
+        evidence_summary["main_material_source"] = "hBeamSectionEvidence.stationFrames"
+        evidence_summary["slice_station_count"] = str(len(stations))
+        evidence_summary["slice_station_span"] = f"{span:.3f}"
+        evidence_summary["slice_axis_coverage_ratio"] = f"{coverage_ratio:.3f}"
+        evidence_summary["slice_loop_count"] = str(item["loop_count"])
+        evidence_summary["slice_segment_count"] = str(item["segment_count"])
+        evidence_summary["slice_role_hints"] = ";".join(sorted(role_hints))
+        groups.append(
+            BoxMainMaterialSegmentGroup(
+                assembly_id=group.assembly_id,
+                group_type="MAIN_MATERIAL_SEGMENT_GROUP",
+                face_id="H_GL_STATION_SLICE",
+                part_ids=group.part_ids,
+                part_positions=group.part_positions,
+                station_ranges=group.station_ranges,
+                gap_summary=group.gap_summary,
+                continuity_level=SegmentContinuityLevel.CONTINUOUS,
+                evidence_codes=_dedupe(list(group.evidence_codes) + ["PROFILE_FAMILY_H_OR_GL", "H_GL_STATION_SLICE_MAIN_PLATE"]),
+                confidence=max(group.confidence, 0.88),
+                issue_category="",
+                evidence_summary=evidence_summary,
+            )
+        )
+    return sorted(groups, key=lambda group: (group.station_ranges, ";".join(group.part_positions)))
+
+
+def _h_gl_slice_has_section_loop(part_slice: dict[str, Any]) -> bool:
+    section_loops = part_slice.get("sectionLoops")
+    if isinstance(section_loops, list):
+        for section_loop in section_loops:
+            if not isinstance(section_loop, dict):
+                continue
+            if section_loop.get("isClosed") is False or section_loop.get("isValid") is False:
+                continue
+            if len(_parse_loop_points(section_loop.get("points"))) >= 3:
+                return True
+    return len(part_slice.get("segments") or []) >= 4
+
+
+def _station_span(stations: list[float]) -> float:
+    if not stations:
+        return 0.0
+    return max(stations) - min(stations)
+
+
+def _h_gl_slice_role(role_hints: set[str]) -> str:
+    if "web_candidate" in role_hints and "flange_candidate" not in role_hints:
+        return "WEB"
+    if "flange_candidate" in role_hints and "web_candidate" not in role_hints:
+        return "FLANGE"
+    return "MAIN_PLATE"
+
 def _h_or_gl_part_role(part: dict[str, Any]) -> str:
     name = text(part.get("name"))
     if "上翼缘" in name:
@@ -579,7 +908,6 @@ def _h_or_gl_part_role(part: dict[str, Any]) -> str:
     if "腹板" in name:
         return "WEB"
     return ""
-
 
 def _role_continuity(parts: list[dict[str, Any]]) -> SegmentContinuityLevel:
     if len(parts) == 1:
@@ -739,27 +1067,5 @@ def _unique_values(values: Any) -> list[str]:
         if item and item not in result:
             result.append(item)
     return result
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

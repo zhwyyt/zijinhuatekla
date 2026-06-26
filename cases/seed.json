@@ -24,8 +24,22 @@
         "manufacturing_scope_issue_type",
         "model_scope"
       ]
+    },
+    {
+      "case_id": "T2-3GL-55:h-gl-confirmed-main-plates",
+      "issue_type": "SCORING",
+      "expected_label": "H_GL_CONFIRMED_MAIN_PLATES",
+      "human_note": "人工确认 T2-3GL-55 中 T2-3B-526、T2-3B-797、T2-3B-508 都属于异形 H/GL 构件主板；其中 T2-3B-508 虽由 continuous plate fallback 识别为 wall_candidate，但业务口径确认它不是普通附件，而是主板。",
+      "evidence_fields": [
+        "member_id",
+        "partPosition",
+        "partId",
+        "role_candidate",
+        "axisStationStart",
+        "axisStationEnd",
+        "relationship_counts",
+        "human_confirmed_main_plate"
+      ]
     }
   ]
 }
-
-
