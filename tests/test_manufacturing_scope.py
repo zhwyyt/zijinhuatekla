@@ -104,6 +104,28 @@ class ManufacturingScopeTests(unittest.TestCase):
         self.assertEqual("50.0", flat_rows[0]["continuity_gaps"])
         self.assertEqual("NEAR_CONTINUOUS", flat_rows[0]["continuity_level"])
 
+    def test_station_continuity_prefers_exported_main_material_station_ranges(self):
+        row = {
+            "零件名称": "T3-P-4914",
+            "规格": "PL16*968",
+            "长度": 6200,
+            "prediction_status": "DATA_MISSING",
+            "match_method": "missing",
+            "predicted_role": "箱型柱主材壁板",
+            "形状分类": "异形主材",
+        }
+        first = _plate_at("72805753", "T3-P-6284", 9000, 3000)
+        second = _plate_at("72806584", "T3-P-6270", 1000, 3000)
+        first["mainMaterialEvidence"] = {"axisStationStart": 0, "axisStationEnd": 3000}
+        second["mainMaterialEvidence"] = {"axisStationStart": 3005, "axisStationEnd": 6005}
+        bundle = {"assemblies": [{"assemblyId": "72805757", "parts": [first, second]}]}
+
+        report = build_manufacturing_scope_report("T3-5GKZ-10", [row], bundle)
+
+        candidate = report[0]["candidates"][0]
+        self.assertEqual("T3-P-6284:0.0-3000.0;T3-P-6270:3005.0-6005.0", candidate["station_ranges"])
+        self.assertEqual("5.0", candidate["continuity_gaps"])
+        self.assertEqual("CONTINUOUS", candidate["continuity_level"])
     def test_overlapping_station_ranges_require_face_grouping(self):
         row = {
             "零件名称": "T3-P-4914",
@@ -243,12 +265,3 @@ def _plate_at(part_id, position, station_center, length):
     return part
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
-
-
-
-
-

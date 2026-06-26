@@ -31,9 +31,12 @@ def body_part_ids_from_member_roles(member: dict[str, Any]) -> set[str]:
 def appendage_cluster_features_from_bundle(
     assembly: dict[str, Any],
     member: dict[str, Any],
+    body_part_ids: set[str] | None = None,
 ) -> list[AppendageClusterFeatures]:
     parts = {text(part.get("partId")): part for part in assembly.get("parts", [])}
-    body_ids = body_part_ids_from_member_roles(member)
+    body_ids = {text(part_id) for part_id in (body_part_ids or set()) if text(part_id)}
+    if not body_ids:
+        body_ids = body_part_ids_from_member_roles(member)
     if not body_ids and assembly.get("mainPartId"):
         body_ids = {text(assembly.get("mainPartId"))}
 
@@ -70,10 +73,11 @@ def appendage_cluster_features_from_bundle(
 def classify_appendage_clusters_from_bundle(
     assembly: dict[str, Any],
     member: dict[str, Any],
+    body_part_ids: set[str] | None = None,
 ) -> list[AppendageRoleClassification]:
     return [
         classify_appendage_cluster(features)
-        for features in appendage_cluster_features_from_bundle(assembly, member)
+        for features in appendage_cluster_features_from_bundle(assembly, member, body_part_ids=body_part_ids)
     ]
 
 

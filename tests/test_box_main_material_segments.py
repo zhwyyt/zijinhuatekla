@@ -312,6 +312,147 @@ class BoxMainMaterialSegmentTests(unittest.TestCase):
         self.assertIn("SECTION_VALIDATED", group.evidence_codes)
 
 
+    def test_uses_box_section_evidence_loops_as_main_wall_seed_without_member_samples(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "memberAxisEvidence": {"source": "mainPart.longestLocalAxis"},
+                "boxSectionEvidence": {
+                    "source": "teklaSolidFaceSectionSegments.v2",
+                    "stationLoops": [
+                        {
+                            "station": 100,
+                            "partLoops": [
+                                _section_loop_part("1", 0, 0, 100, 10),
+                                _section_loop_part("2", 0, 90, 100, 100),
+                                _section_loop_part("3", 0, 0, 10, 100),
+                                _section_loop_part("4", 90, 0, 100, 100),
+                                _section_loop_part("5", 40, 40, 60, 60),
+                            ],
+                        }
+                    ],
+                },
+            },
+            "relationships": [],
+            "parts": [
+                _wall_part("1", "A-P-bottom", "RADIAL_Y_NEG", 0, 3000),
+                _wall_part("2", "A-P-top", "RADIAL_Y_POS", 0, 3000),
+                _wall_part("3", "A-P-left", "RADIAL_X_NEG", 0, 3000),
+                _wall_part("4", "A-P-right", "RADIAL_X_POS", 0, 3000),
+                _wall_part("5", "A-P-inside", "RADIAL_INNER", 500, 800),
+            ],
+        }
+
+        groups = classify_box_main_material_segment_groups(assembly, member=None)
+
+        self.assertEqual(1, len(groups))
+        group = groups[0]
+        self.assertEqual("BOX_MAIN_WALL_CONFIRMED_SET", group.group_type)
+        self.assertCountEqual(
+            ["A-P-bottom", "A-P-top", "A-P-left", "A-P-right"],
+            group.part_positions,
+        )
+        self.assertNotIn("A-P-inside", group.part_positions)
+        self.assertIn("BOX_SECTION_LOOP_TOPOLOGY_SEED", group.evidence_codes)
+        self.assertIn("SECTION_VALIDATED", group.evidence_codes)
+
+    def test_box_section_topology_seed_ignores_short_transition_loops_even_when_large(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "memberAxisEvidence": {"length": 3000},
+                "boxSectionEvidence": {
+                    "source": "teklaSolidFaceSectionSegments.v2",
+                    "stationLoops": [
+                        {
+                            "station": 100,
+                            "partLoops": [
+                                _section_loop_part("end", -100, -100, 200, 200),
+                                _section_loop_part("1", 0, 0, 100, 10),
+                                _section_loop_part("2", 0, 90, 100, 100),
+                                _section_loop_part("3", 0, 0, 10, 100),
+                                _section_loop_part("4", 90, 0, 100, 100),
+                            ],
+                        }
+                    ],
+                },
+            },
+            "relationships": [],
+            "parts": [
+                _wall_part("end", "A-P-short-transition", "RADIAL_Y_NEG", 1200, 1350, thickness=32),
+                _wall_part("1", "A-P-bottom", "RADIAL_Y_NEG", 0, 3000),
+                _wall_part("2", "A-P-top", "RADIAL_Y_POS", 0, 3000),
+                _wall_part("3", "A-P-left", "RADIAL_X_NEG", 0, 3000),
+                _wall_part("4", "A-P-right", "RADIAL_X_POS", 0, 3000),
+            ],
+        }
+        assembly["parts"][0]["mainMaterialEvidence"]["sectionProjectionEvidence"] = {
+            "normalProjectionMagnitude": 0.17
+        }
+
+        groups = classify_box_main_material_segment_groups(assembly, member=None)
+
+        self.assertEqual(1, len(groups))
+        self.assertCountEqual(
+            ["A-P-bottom", "A-P-top", "A-P-left", "A-P-right"],
+            groups[0].part_positions,
+        )
+        self.assertNotIn("A-P-short-transition", groups[0].part_positions)
+
+    def test_expands_section_seed_to_adjacent_flange_role_wall_candidates(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {"memberAxisEvidence": {"source": "mainPart.longestLocalAxis"}},
+            "relationships": [],
+            "parts": [
+                _wall_part("1", "A-P-seed-a", "RADIAL_X_NEG", 0, 3165, thickness=16),
+                _wall_part("2", "A-P-seed-b", "RADIAL_X_POS", 0, 3165, thickness=16),
+                _wall_part("3", "A-P-next-a", "RADIAL_X_NEG", 3164.98, 6016, thickness=30),
+                _wall_part("4", "A-P-next-b", "RADIAL_X_POS", 3165.02, 6016, thickness=30),
+                _wall_part("5", "A-P-local-attachment", "RADIAL_X_POS", 9000, 9200, thickness=16),
+            ],
+        }
+        member = {
+            "Samples": [
+                {
+                    "SampleId": "S02",
+                    "IsAbnormal": False,
+                    "SectionFeatures": {"ClosedLoops": 1, "CavityCount": 1, "OuterWidth": 1000, "OuterHeight": 1000},
+                    "SectionParts": [
+                        {"PartId": "1", "RoleHint": "flange_candidate", "TotalCutLength": 960},
+                        {"PartId": "2", "RoleHint": "web_candidate", "TotalCutLength": 970},
+                    ],
+                }
+            ],
+            "Parts": [
+                {"PartId": "1", "AxisProjection": {"Start": 0, "End": 3165, "Length": 3165}},
+                {"PartId": "2", "AxisProjection": {"Start": 0, "End": 3165, "Length": 3165}},
+                {"PartId": "3", "AxisProjection": {"Start": 3164.98, "End": 6016, "Length": 2851.02}},
+                {"PartId": "4", "AxisProjection": {"Start": 3165.02, "End": 6016, "Length": 2850.98}},
+                {"PartId": "5", "AxisProjection": {"Start": 9000, "End": 9200, "Length": 200}},
+            ],
+            "Classification": {
+                "PartRoles": [
+                    {"PartId": "1", "Role": "flange_candidate"},
+                    {"PartId": "2", "Role": "web_candidate"},
+                    {"PartId": "3", "Role": "flange_candidate"},
+                    {"PartId": "4", "Role": "web_candidate"},
+                    {"PartId": "5", "Role": "flange_candidate"},
+                ]
+            },
+        }
+
+        groups = classify_box_main_material_segment_groups(assembly, member)
+
+        self.assertEqual(1, len(groups))
+        group = groups[0]
+        self.assertEqual(
+            ["A-P-seed-a", "A-P-seed-b", "A-P-next-a", "A-P-next-b"],
+            group.part_positions,
+        )
+        self.assertNotIn("A-P-local-attachment", group.part_positions)
+        self.assertIn("AXIS_CONTINUITY_EXPANDED", group.evidence_codes)
+
 def _wall_part(
     part_id,
     position,
@@ -347,20 +488,26 @@ def _wall_part(
         },
     }
 
+def _section_loop_part(part_id, min_u, min_v, max_u, max_v):
+    return {
+        "partId": part_id,
+        "sectionLoops": [
+            {
+                "points": [
+                    {"u": min_u, "v": min_v},
+                    {"u": max_u, "v": min_v},
+                    {"u": max_u, "v": max_v},
+                    {"u": min_u, "v": max_v},
+                ],
+                "isClosed": True,
+                "isValid": True,
+            }
+        ],
+    }
+
+
 def _weld(part_a, part_b):
     return {"partIdA": part_a, "partIdB": part_b, "edgeType": "Weld"}
 
 if __name__ == "__main__":
     unittest.main()
-
-
-
-
-
-
-
-
-
-
-
-

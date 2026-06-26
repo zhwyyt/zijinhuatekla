@@ -76,6 +76,29 @@ class SpatialFeatureTests(unittest.TestCase):
         self.assertFalse(cluster.has_end_connection_signal)
         self.assertEqual(["10", "11", "12"], cluster.part_ids)
 
+    def test_bundle_cluster_uses_confirmed_body_ids_when_old_member_roles_are_missing(self):
+        assembly = {
+            "assemblyId": "A1",
+            "mainPartId": 1,
+            "parts": [
+                part(1, "A1-BODY-A", (0, 0, 0), (1000, 100, 100), "主体板"),
+                part(2, "A1-BODY-B", (0, 100, 0), (1000, 200, 100), "主体板"),
+                part(10, "A1-BR-ROOT", (400, 200, 30), (430, 230, 70), "牛腿根部板"),
+                part(11, "A1-BR-RIB", (430, 230, 30), (520, 460, 50), "牛腿肋板"),
+            ],
+            "relationships": [
+                {"partIdA": 2, "partIdB": 10, "edgeType": "Contact"},
+                {"partIdA": 10, "partIdB": 11, "edgeType": "Weld"},
+            ],
+        }
+        member = {"AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}, "Length": 1000}]}
+
+        features = appendage_cluster_features_from_bundle(assembly, member, body_part_ids={"1", "2"})
+
+        self.assertEqual(1, len(features))
+        self.assertEqual(["10", "11"], features[0].part_ids)
+        self.assertAlmostEqual(0.5, features[0].root_contact_ratio, places=4)
+
     def test_bundle_cluster_features_feed_bracket_classifier(self):
         assembly = {
             "assemblyId": "A1",

@@ -9,6 +9,7 @@ description = "Tekla processing recognition helpers for Zijinhua workflows"
 requires-python = ">=3.10"
 dependencies = [
     "pandas",
+    "shapely",
 ]
 
 [tool.setuptools.packages.find]

@@ -63,6 +63,43 @@
 
 该字段只表达可复核的截面几何证据，不在导出器中直接声明 `INNER/OUTER/WALL`。下游应基于投影轮廓、焊接/接触关系、station 连续性和闭环拓扑综合判断。
 
+
+## Box Section Topology Evidence
+
+2026-06-24 补充：BOX 内外关系和主壁板复核不能再消费旧 point-set 作为闭合 loop。导出器在 `metadata.boxSectionEvidence` 下新增 Tekla solid 原生截面拓扑证据，当前 source 为 `teklaSolidFaceSectionSegments.v2`。
+
+Assembly metadata 字段：
+
+- `boxSectionEvidence.source`
+- `boxSectionEvidence.stationLoops[].station`
+- `boxSectionEvidence.stationLoops[].supportPartIds`
+- `boxSectionEvidence.stationLoops[].sectionSegments`
+- `boxSectionEvidence.stationLoops[].sectionLoops`
+- `boxSectionEvidence.stationLoops[].closedLoopCount`
+- `boxSectionEvidence.stationLoops[].openChainCount`
+- `boxSectionEvidence.stationLoops[].degeneratePartLoopCount`
+- `boxSectionEvidence.stationLoops[].diagnostics`
+
+Part loop 字段：
+
+- `boxSectionEvidence.stationLoops[].partLoops[].partId`
+- `boxSectionEvidence.stationLoops[].partLoops[].segments`
+- `boxSectionEvidence.stationLoops[].partLoops[].sectionLoops`
+- `boxSectionEvidence.stationLoops[].partLoops[].closedLoopCount`
+- `boxSectionEvidence.stationLoops[].partLoops[].openChainCount`
+- `boxSectionEvidence.stationLoops[].partLoops[].loopStatus`
+- `boxSectionEvidence.stationLoops[].partLoops[].area`
+- `boxSectionEvidence.stationLoops[].partLoops[].isClosed`
+- `boxSectionEvidence.stationLoops[].partLoops[].isValid`
+- `boxSectionEvidence.stationLoops[].partLoops[].bounds`
+- `boxSectionEvidence.stationLoops[].partLoops[].diagnostics`
+
+下游消费顺序：
+
+1. 优先使用 exporter `sectionLoops` 构建真实截面 topology。
+2. 若 `sectionLoops` 缺失，则用 `segments` + geometry library polygonize。
+3. 仅为兼容旧 cache，最后才 fallback 到旧 `points`。
+4. station topology diagnostics 必须输出核心 BODY station 与端部/附件触发 station 的区别，避免把端部过渡误报为主体闭合失败。
 ## Algorithm Direction
 
 下一步在 `I:\zijinhuatekla` 中新增 BOX 主材分段集合算法：
@@ -79,6 +116,8 @@
 - 新导出的 JSON 每个 assembly 有 `metadata.memberAxisEvidence`。
 - 每个 part 有 `mainMaterialEvidence`。
 - 新导出 JSON 的每个 part 有 `mainMaterialEvidence.sectionProjectionEvidence`。
+- 新导出 JSON 的 BOX assembly 有 `metadata.boxSectionEvidence.source=teklaSolidFaceSectionSegments.v2`。
+- station loop 证据优先提供 `sectionLoops`；缺失时可提供 `sectionSegments/segments`，Python 侧可 polygonize；旧 `points` 仅作兼容 fallback。
 - 旧严格编号规则不变：普通 Excel 行仍必须精准匹配 `partPosition`。
 - 主材分段集合算法不得用厚度相等作为必要条件。
 - 若 `bodyFaceId` 或 adjacency 证据不足，进入 Data Quality Gate，不写特例规则。
@@ -94,4 +133,3 @@ dotnet build I:\xingcaisuanfa\TeklaSectionClassifier.Runner\TeklaSectionClassifi
 结果：构建成功，0 errors，4 warnings。警告为既有 nullable/可能 null 返回类型，不阻塞本次导出字段新增。
 
 还需要用户重新从 Tekla 选择 `T3-5GKZ-10` 导出一份新 cache，然后在 `I:\zijinhuatekla` 中接入新字段做算法 smoke。
-

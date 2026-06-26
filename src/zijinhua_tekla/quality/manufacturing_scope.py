@@ -251,10 +251,45 @@ def _candidate_from_segments(row: dict[str, Any], assembly_id: str, segments: li
 
 
 def _station_continuity_evidence(segments: list[dict[str, Any]], row: dict[str, Any]) -> tuple[list[dict[str, Any]], str, str, str]:
+    ranges = _exported_station_ranges(segments)
+    if not ranges:
+        ranges = _estimated_station_ranges(segments, row)
+    if not ranges:
+        return list(segments), "", "", "UNKNOWN"
+
+    ranges.sort(key=lambda item: (item[0], text(item[2].get("partPosition"))))
+    ordered_segments = [part for _, _, part in ranges]
+    station_ranges = ";".join(
+        f"{text(part.get('partPosition'))}:{start:.1f}-{end:.1f}" for start, end, part in ranges
+    )
+    raw_gaps = [ranges[index][0] - ranges[index - 1][1] for index in range(1, len(ranges))]
+    gaps = [max(0.0, gap) for gap in raw_gaps]
+    continuity_gaps = ";".join(f"{gap:.1f}" for gap in gaps)
+    continuity_level = "AXIS_OVERLAP_NEEDS_FACE_GROUPING" if any(gap < -10.0 for gap in raw_gaps) else _continuity_level(gaps)
+    return ordered_segments, station_ranges, continuity_gaps, continuity_level
+
+
+def _exported_station_ranges(segments: list[dict[str, Any]]) -> list[tuple[float, float, dict[str, Any]]]:
+    ranges = []
+    for part in segments:
+        evidence = part.get("mainMaterialEvidence", {})
+        if not isinstance(evidence, dict):
+            return []
+        start = as_float(evidence.get("axisStationStart"))
+        end = as_float(evidence.get("axisStationEnd"))
+        if start == 0 and end == 0:
+            return []
+        if end < start:
+            start, end = end, start
+        ranges.append((start, end, part))
+    return ranges
+
+
+def _estimated_station_ranges(segments: list[dict[str, Any]], row: dict[str, Any]) -> list[tuple[float, float, dict[str, Any]]]:
     ranges = []
     direction = _segment_axis(segments)
     if not direction:
-        return list(segments), "", "", "UNKNOWN"
+        return ranges
 
     for part in segments:
         centroid = part.get("centroid") or {}
@@ -267,20 +302,10 @@ def _station_continuity_evidence(segments: list[dict[str, Any]], row: dict[str, 
         ranges.append((start, end, part))
 
     if not ranges:
-        return list(segments), "", "", "UNKNOWN"
-
+        return []
     ranges.sort(key=lambda item: (item[0], text(item[2].get("partPosition"))))
     origin = ranges[0][0]
-    normalized = [(start - origin, end - origin, part) for start, end, part in ranges]
-    ordered_segments = [part for _, _, part in normalized]
-    station_ranges = ";".join(
-        f"{text(part.get('partPosition'))}:{start:.1f}-{end:.1f}" for start, end, part in normalized
-    )
-    raw_gaps = [normalized[index][0] - normalized[index - 1][1] for index in range(1, len(normalized))]
-    gaps = [max(0.0, gap) for gap in raw_gaps]
-    continuity_gaps = ";".join(f"{gap:.1f}" for gap in gaps)
-    continuity_level = "AXIS_OVERLAP_NEEDS_FACE_GROUPING" if any(gap < -10.0 for gap in raw_gaps) else _continuity_level(gaps)
-    return ordered_segments, station_ranges, continuity_gaps, continuity_level
+    return [(start - origin, end - origin, part) for start, end, part in ranges]
 
 
 def _segment_axis(segments: list[dict[str, Any]]) -> tuple[float, float, float] | None:
@@ -353,11 +378,3 @@ def _flat_scope_row(
         "confirmed_segment_positions": candidate.get("confirmed_segment_positions", ""),
         "confirmation_level": candidate.get("confirmation_level", ""),
     }
-
-
-
-
-
-
-
-

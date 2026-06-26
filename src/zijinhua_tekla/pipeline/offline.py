@@ -16,6 +16,8 @@ from ..casebank import CaseBank
 from ..classifiers import classify_part
 from ..classifiers.box_main_material_segments import BoxMainMaterialSegmentGroup, classify_main_material_segment_groups
 from ..classifiers.box_part_spatial_relations import BoxPartSpatialRelation, classify_box_part_spatial_relations
+from ..classifiers.box_station_topology_diagnostics import BoxStationTopologyDiagnostic, diagnose_box_station_topology
+from ..classifiers.h_beam_part_sides import HBeamPartSide, classify_h_beam_part_sides
 from ..features import build_feature_index, feature_snapshots_from_bundle_parts
 from ..quality.gate import DataQualityReport
 from ..quality.gate import quality_report_from_aligned_rows
@@ -34,6 +36,8 @@ class OfflinePipelineResult:
     spatial_classifications: list[Any] = field(default_factory=list)
     box_main_material_segment_groups: list[BoxMainMaterialSegmentGroup] = field(default_factory=list)
     box_part_spatial_relations: list[BoxPartSpatialRelation] = field(default_factory=list)
+    box_station_topology_diagnostics: list[BoxStationTopologyDiagnostic] = field(default_factory=list)
+    h_beam_part_sides: list[HBeamPartSide] = field(default_factory=list)
 
 
 def run_offline_analysis(
@@ -66,7 +70,9 @@ def run_offline_analysis(
     main_material_groups = classify_main_material_segment_groups(
         assembly, member, _confirmed_segment_positions(member_id, case_bank)
     )
-    spatial_classifications = classify_appendage_clusters_from_bundle(assembly, member)
+    spatial_classifications = classify_appendage_clusters_from_bundle(
+        assembly, member, body_part_ids=_main_wall_part_ids(main_material_groups)
+    )
     outside_part_ids = _outside_part_ids(spatial_classifications)
     return OfflinePipelineResult(
         member=member,
@@ -79,9 +85,20 @@ def run_offline_analysis(
         box_part_spatial_relations=classify_box_part_spatial_relations(
             assembly, member, main_material_groups, outside_part_ids=outside_part_ids
         ),
+        box_station_topology_diagnostics=diagnose_box_station_topology(assembly, main_material_groups),
+        h_beam_part_sides=classify_h_beam_part_sides(assembly, member),
     )
 
 
+
+def _main_wall_part_ids(groups: list[BoxMainMaterialSegmentGroup]) -> set[str]:
+    return {
+        text(part_id)
+        for group in groups
+        if group.group_type == "BOX_MAIN_WALL_CONFIRMED_SET"
+        for part_id in group.part_ids
+        if text(part_id)
+    }
 
 def _outside_part_ids(spatial_classifications: list[Any]) -> set[str]:
     result: set[str] = set()

@@ -8,6 +8,8 @@ import pandas as pd
 from zijinhua_tekla.bracket_classifier import AppendageRoleClassification
 from zijinhua_tekla.classifiers.box_main_material_segments import BoxMainMaterialSegmentGroup, SegmentContinuityLevel
 from zijinhua_tekla.classifiers.box_part_spatial_relations import BoxPartSpatialRelation
+from zijinhua_tekla.classifiers.box_station_topology_diagnostics import BoxStationTopologyDiagnostic
+from zijinhua_tekla.classifiers.h_beam_part_sides import HBeamPartSide
 from zijinhua_tekla.pipeline.offline import OfflinePipelineResult
 from zijinhua_tekla.quality.gate import quality_report_from_aligned_rows
 from zijinhua_tekla.reports.offline import write_offline_analysis_report
@@ -155,6 +157,25 @@ class OfflineReportTests(unittest.TestCase):
                     confidence=0.95,
                 )
             ],
+            box_station_topology_diagnostics=[
+                BoxStationTopologyDiagnostic(
+                    assembly_id="100",
+                    station=1500.0,
+                    topology_status="CLOSED_WITH_CAVITY",
+                    main_wall_loop_count=4,
+                    usable_loop_count=4,
+                    degenerate_loop_count=0,
+                    union_geometry_type="MultiPolygon",
+                    union_component_count=4,
+                    inner_loop_count=1,
+                    topology_area=120000.0,
+                    topology_bounds="0.0;0.0;500.0;500.0",
+                    evidence_codes=["EXPORTED_SECTION_LOOP_TOPOLOGY", "STATION_HAS_INNER_CAVITY_LOOP"],
+                    station_scope="BODY_CORE",
+                    trigger_part_summaries=[{"part_position": "A-P-trigger"}],
+                    loop_summaries=[{"part_position": "A-P-401", "is_degenerate": False}],
+                )
+            ],
             box_part_spatial_relations=[
                 BoxPartSpatialRelation(
                     assembly_id="100",
@@ -178,6 +199,18 @@ class OfflineReportTests(unittest.TestCase):
                     evidence_codes=["SECTION_INSIDE_CAVITY_TRACE", "CONNECTED_TO_MAIN_WALL"],
                     confidence=0.86,
                 ),
+            ],
+            h_beam_part_sides=[
+                HBeamPartSide(
+                    assembly_id="100",
+                    part_id="20",
+                    part_position="A-P-20",
+                    part_name="吊耳",
+                    h_side="TOP_FLANGE_OUTER",
+                    confidence=0.92,
+                    evidence_codes=["PROJECTED_CONTOUR_VOTE", "FLANGE_OUTER_V_BOUNDARY"],
+                    evidence_summary={"vote_counts": "TOP_FLANGE_OUTER=6"},
+                )
             ],
             spatial_classifications=[
                 AppendageRoleClassification(
@@ -211,8 +244,12 @@ class OfflineReportTests(unittest.TestCase):
             manufacturing_scope_csv_rows = pd.read_csv(paths.manufacturing_scope_csv_path)
             box_segment_rows = json.loads(paths.box_main_material_segments_path.read_text(encoding="utf-8"))
             box_relation_rows = json.loads(paths.box_part_spatial_relations_path.read_text(encoding="utf-8"))
+            box_topology_rows = json.loads(paths.box_station_topology_diagnostics_path.read_text(encoding="utf-8"))
+            h_side_rows = json.loads(paths.h_beam_part_sides_path.read_text(encoding="utf-8"))
             box_segment_csv_rows = pd.read_csv(paths.box_main_material_segments_csv_path)
             box_relation_csv_rows = pd.read_csv(paths.box_part_spatial_relations_csv_path)
+            box_topology_csv_rows = pd.read_csv(paths.box_station_topology_diagnostics_csv_path)
+            h_side_csv_rows = pd.read_csv(paths.h_beam_part_sides_csv_path)
             markdown = paths.markdown_path.read_text(encoding="utf-8")
 
         self.assertEqual("A-GKZ-1-alignment.csv", paths.csv_path.name)
@@ -235,6 +272,10 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual("A-GKZ-1-box-main-material-segment-groups.csv", paths.box_main_material_segments_csv_path.name)
         self.assertEqual("A-GKZ-1-box-part-spatial-relations.json", paths.box_part_spatial_relations_path.name)
         self.assertEqual("A-GKZ-1-box-part-spatial-relations.csv", paths.box_part_spatial_relations_csv_path.name)
+        self.assertEqual("A-GKZ-1-box-station-topology-diagnostics.json", paths.box_station_topology_diagnostics_path.name)
+        self.assertEqual("A-GKZ-1-box-station-topology-diagnostics.csv", paths.box_station_topology_diagnostics_csv_path.name)
+        self.assertEqual("A-GKZ-1-h-beam-part-sides.json", paths.h_beam_part_sides_path.name)
+        self.assertEqual("A-GKZ-1-h-beam-part-sides.csv", paths.h_beam_part_sides_csv_path.name)
         self.assertEqual("A-GKZ-1-analysis.md", paths.markdown_path.name)
         self.assertEqual(["A-P-1", "A-P-2", "A-P-3", "A-P-4"], list(csv_rows["零件名称"]))
         self.assertEqual("DATA_MISSING", json_rows[1]["prediction_status"])
@@ -277,6 +318,14 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual("MAIN_WALL", box_relation_rows[0]["relation_to_box_body"])
         self.assertEqual(["401", "10"], list(box_relation_csv_rows["part_id"].astype(str)))
         self.assertEqual(["MAIN_WALL", "INSIDE_BODY"], list(box_relation_csv_rows["relation_to_box_body"]))
+        self.assertEqual("CLOSED_WITH_CAVITY", box_topology_rows[0]["topology_status"])
+        self.assertEqual(["CLOSED_WITH_CAVITY"], list(box_topology_csv_rows["topology_status"]))
+        self.assertEqual(["BODY_CORE"], list(box_topology_csv_rows["station_scope"]))
+        self.assertEqual(["A-P-trigger"], list(box_topology_csv_rows["trigger_part_positions"]))
+        self.assertIn("EXPORTED_SECTION_LOOP_TOPOLOGY", box_topology_rows[0]["evidence_codes"])
+        self.assertEqual("TOP_FLANGE_OUTER", h_side_rows[0]["h_side"])
+        self.assertEqual(["A-P-20"], list(h_side_csv_rows["part_position"]))
+        self.assertEqual(["TOP_FLANGE_OUTER"], list(h_side_csv_rows["h_side"]))
         self.assertIn("# A-GKZ-1 加工识别对齐分析", markdown)
         self.assertIn("`MATCH`=1", markdown)
         self.assertIn("`DATA_MISSING`=2", markdown)
@@ -307,8 +356,15 @@ class OfflineReportTests(unittest.TestCase):
         self.assertIn("`INSIDE_BODY`=1", markdown)
         self.assertIn("BOX Part Spatial Relations JSON", markdown)
         self.assertIn("BOX Part Spatial Relations CSV", markdown)
+        self.assertIn("## BOX Station Topology 诊断", markdown)
+        self.assertIn("`CLOSED_WITH_CAVITY`=1", markdown)
+        self.assertIn("BOX Station Topology Diagnostics JSON", markdown)
+        self.assertIn("BOX Station Topology Diagnostics CSV", markdown)
+        self.assertIn("## H 钢零件侧面", markdown)
+        self.assertIn("`TOP_FLANGE_OUTER`=1", markdown)
+        self.assertIn("H Beam Part Sides JSON", markdown)
+        self.assertIn("H Beam Part Sides CSV", markdown)
 
 
 if __name__ == "__main__":
     unittest.main()
-

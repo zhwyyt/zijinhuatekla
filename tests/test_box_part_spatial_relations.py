@@ -266,6 +266,314 @@ class BoxPartSpatialRelationTests(unittest.TestCase):
         by_position = {row.part_position: row for row in rows}
         self.assertEqual("BOUNDARY_OR_THROUGH", by_position["A-P-mixed"].relation_to_box_body)
         self.assertIn("PROJECTED_CENTROID_MIXED_ACROSS_STATION_LOOPS", by_position["A-P-mixed"].evidence_codes)
+
+    def test_treats_inside_and_cavity_station_mix_as_inside_body(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "boxSectionEvidence": {
+                    "stationLoops": [
+                        {
+                            "station": 10,
+                            "partLoops": [
+                                {"partId": "bottom", "points": [{"u": 0, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 20}, {"u": 0, "v": 20}]},
+                                {"partId": "top", "points": [{"u": 0, "v": 80}, {"u": 100, "v": 80}, {"u": 100, "v": 100}, {"u": 0, "v": 100}]},
+                                {"partId": "left", "points": [{"u": 0, "v": 0}, {"u": 20, "v": 0}, {"u": 20, "v": 100}, {"u": 0, "v": 100}]},
+                                {"partId": "right", "points": [{"u": 80, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 100}, {"u": 80, "v": 100}]},
+                            ],
+                        },
+                        {
+                            "station": 50,
+                            "partLoops": [
+                                {"partId": "bottom", "points": [{"u": 0, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 20}, {"u": 0, "v": 20}]},
+                                {"partId": "top", "points": [{"u": 0, "v": 80}, {"u": 100, "v": 80}, {"u": 100, "v": 100}, {"u": 0, "v": 100}]},
+                                {"partId": "left", "points": [{"u": 0, "v": 0}, {"u": 20, "v": 0}, {"u": 20, "v": 100}, {"u": 0, "v": 100}]},
+                                {"partId": "right", "points": [{"u": 80, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 100}, {"u": 80, "v": 100}]},
+                            ],
+                        },
+                        {
+                            "station": 90,
+                            "partLoops": [
+                                {"partId": "bottom", "points": [{"u": 0, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 60}, {"u": 0, "v": 60}]},
+                                {"partId": "top", "points": [{"u": 0, "v": 80}, {"u": 100, "v": 80}, {"u": 100, "v": 100}, {"u": 0, "v": 100}]},
+                                {"partId": "left", "points": [{"u": 0, "v": 0}, {"u": 20, "v": 0}, {"u": 20, "v": 100}, {"u": 0, "v": 100}]},
+                                {"partId": "right", "points": [{"u": 80, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 100}, {"u": 80, "v": 100}]},
+                            ],
+                        },
+                    ],
+                    "source": "test.stationLoops",
+                }
+            },
+            "parts": [
+                {"partId": "bottom", "partPosition": "A-P-bottom"},
+                {"partId": "top", "partPosition": "A-P-top"},
+                {"partId": "left", "partPosition": "A-P-left"},
+                {"partId": "right", "partPosition": "A-P-right"},
+                _centroid_part("inner", "A-P-tight-inner", 30, 50, station_start=0, station_end=100),
+            ],
+        }
+        main_wall_groups = [
+            BoxMainMaterialSegmentGroup(
+                assembly_id="A-1",
+                group_type="BOX_MAIN_WALL_CONFIRMED_SET",
+                face_id="BOX_MAIN_WALL_CONFIRMED",
+                part_ids=["bottom", "top", "left", "right"],
+                part_positions=["A-P-bottom", "A-P-top", "A-P-left", "A-P-right"],
+                station_ranges="",
+                gap_summary="",
+                continuity_level=SegmentContinuityLevel.CONTINUOUS,
+                evidence_codes=["SECTION_VALIDATED"],
+                confidence=0.92,
+            )
+        ]
+
+        rows = classify_box_part_spatial_relations(assembly, None, main_wall_groups)
+
+        by_position = {row.part_position: row for row in rows}
+        self.assertEqual("INSIDE_BODY", by_position["A-P-tight-inner"].relation_to_box_body)
+        self.assertIn("POINT_IN_CAVITY_LOOP", by_position["A-P-tight-inner"].evidence_codes)
+
+    def test_ignores_local_incomplete_station_topology_when_cavity_reference_exists(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "boxSectionEvidence": {
+                    "stationLoops": [
+                        {
+                            "station": 10,
+                            "partLoops": [
+                                {"partId": "bottom", "points": [{"u": 0, "v": 0}, {"u": 1000, "v": 0}, {"u": 1000, "v": 20}, {"u": 0, "v": 20}]},
+                                {"partId": "top", "points": [{"u": 0, "v": 980}, {"u": 1000, "v": 980}, {"u": 1000, "v": 1000}, {"u": 0, "v": 1000}]},
+                                {"partId": "left", "points": [{"u": 0, "v": 0}, {"u": 20, "v": 0}, {"u": 20, "v": 1000}, {"u": 0, "v": 1000}]},
+                                {"partId": "right", "points": [{"u": 980, "v": 0}, {"u": 1000, "v": 0}, {"u": 1000, "v": 1000}, {"u": 980, "v": 1000}]},
+                            ],
+                        },
+                        {
+                            "station": 500,
+                            "partLoops": [
+                                {"partId": "left", "points": [{"u": 0, "v": 0}, {"u": 20, "v": 0}, {"u": 20, "v": 1000}, {"u": 0, "v": 1000}]},
+                            ],
+                        },
+                        {
+                            "station": 900,
+                            "partLoops": [
+                                {"partId": "right", "points": [{"u": 980, "v": 0}, {"u": 1000, "v": 0}, {"u": 1000, "v": 1000}, {"u": 980, "v": 1000}]},
+                            ],
+                        },
+                    ],
+                    "source": "test.stationLoops",
+                }
+            },
+            "parts": [
+                {"partId": "bottom", "partPosition": "A-P-bottom"},
+                {"partId": "top", "partPosition": "A-P-top"},
+                {"partId": "left", "partPosition": "A-P-left"},
+                {"partId": "right", "partPosition": "A-P-right"},
+                _centroid_part("inside", "A-P-inside-local-stations", 500, 500, station_start=475, station_end=925),
+            ],
+        }
+        main_wall_groups = [
+            BoxMainMaterialSegmentGroup(
+                assembly_id="A-1",
+                group_type="BOX_MAIN_WALL_CONFIRMED_SET",
+                face_id="BOX_MAIN_WALL_CONFIRMED",
+                part_ids=["bottom", "top", "left", "right"],
+                part_positions=["A-P-bottom", "A-P-top", "A-P-left", "A-P-right"],
+                station_ranges="",
+                gap_summary="",
+                continuity_level=SegmentContinuityLevel.CONTINUOUS,
+                evidence_codes=["SECTION_VALIDATED"],
+                confidence=0.92,
+            )
+        ]
+
+        rows = classify_box_part_spatial_relations(assembly, None, main_wall_groups)
+
+        by_position = {row.part_position: row for row in rows}
+        self.assertEqual("INSIDE_BODY", by_position["A-P-inside-local-stations"].relation_to_box_body)
+    def test_station_part_loop_topology_preserves_concave_outer_loop(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "boxSectionEvidence": {
+                    "stationLoops": [
+                        {
+                            "station": 500,
+                            "partLoops": [
+                                {
+                                    "partId": "wall",
+                                    "points": [
+                                        {"u": 0, "v": 0},
+                                        {"u": 100, "v": 0},
+                                        {"u": 100, "v": 40},
+                                        {"u": 40, "v": 40},
+                                        {"u": 40, "v": 100},
+                                        {"u": 0, "v": 100},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    "source": "test.stationLoops",
+                }
+            },
+            "parts": [
+                {"partId": "wall", "partPosition": "A-P-wall"},
+                _centroid_part("inside", "A-P-inside-l", 20, 80, station_start=40, station_end=60),
+                _centroid_part("outside", "A-P-outside-concave-void", 80, 80, station_start=40, station_end=60),
+            ],
+        }
+        main_wall_groups = [
+            BoxMainMaterialSegmentGroup(
+                assembly_id="A-1",
+                group_type="BOX_MAIN_WALL_CONFIRMED_SET",
+                face_id="BOX_MAIN_WALL_CONFIRMED",
+                part_ids=["wall"],
+                part_positions=["A-P-wall"],
+                station_ranges="",
+                gap_summary="",
+                continuity_level=SegmentContinuityLevel.CONTINUOUS,
+                evidence_codes=["SECTION_VALIDATED"],
+                confidence=0.92,
+            )
+        ]
+
+        rows = classify_box_part_spatial_relations(assembly, None, main_wall_groups)
+
+        by_position = {row.part_position: row for row in rows}
+        self.assertEqual("INSIDE_BODY", by_position["A-P-inside-l"].relation_to_box_body)
+        self.assertEqual("OUTSIDE_ATTACHMENT", by_position["A-P-outside-concave-void"].relation_to_box_body)
+        self.assertIn("SHAPELY_BOX_SECTION_TOPOLOGY", by_position["A-P-outside-concave-void"].evidence_codes)
+
+    def test_station_part_loop_topology_treats_inner_cavity_as_inside_body(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "boxSectionEvidence": {
+                    "stationLoops": [
+                        {
+                            "station": 500,
+                            "partLoops": [
+                                {
+                                    "partId": "wall",
+                                    "points": [
+                                        {"u": 0, "v": 0},
+                                        {"u": 100, "v": 0},
+                                        {"u": 100, "v": 10},
+                                        {"u": 0, "v": 10},
+                                    ],
+                                },
+                                {
+                                    "partId": "wall",
+                                    "points": [
+                                        {"u": 0, "v": 90},
+                                        {"u": 100, "v": 90},
+                                        {"u": 100, "v": 100},
+                                        {"u": 0, "v": 100},
+                                    ],
+                                },
+                                {
+                                    "partId": "wall",
+                                    "points": [
+                                        {"u": 0, "v": 0},
+                                        {"u": 10, "v": 0},
+                                        {"u": 10, "v": 100},
+                                        {"u": 0, "v": 100},
+                                    ],
+                                },
+                                {
+                                    "partId": "wall",
+                                    "points": [
+                                        {"u": 90, "v": 0},
+                                        {"u": 100, "v": 0},
+                                        {"u": 100, "v": 100},
+                                        {"u": 90, "v": 100},
+                                    ],
+                                },
+                            ],
+                        }
+                    ],
+                    "source": "test.stationLoops",
+                }
+            },
+            "parts": [
+                {"partId": "wall", "partPosition": "A-P-wall"},
+                _centroid_part("inside", "A-P-inside-shell", 5, 5, station_start=40, station_end=60),
+                _centroid_part("cavity", "A-P-cavity", 50, 50, station_start=40, station_end=60),
+            ],
+        }
+        main_wall_groups = [
+            BoxMainMaterialSegmentGroup(
+                assembly_id="A-1",
+                group_type="BOX_MAIN_WALL_CONFIRMED_SET",
+                face_id="BOX_MAIN_WALL_CONFIRMED",
+                part_ids=["wall"],
+                part_positions=["A-P-wall"],
+                station_ranges="",
+                gap_summary="",
+                continuity_level=SegmentContinuityLevel.CONTINUOUS,
+                evidence_codes=["SECTION_VALIDATED"],
+                confidence=0.92,
+            )
+        ]
+
+        rows = classify_box_part_spatial_relations(assembly, None, main_wall_groups)
+
+        by_position = {row.part_position: row for row in rows}
+        self.assertEqual("INSIDE_BODY", by_position["A-P-inside-shell"].relation_to_box_body)
+        self.assertEqual("INSIDE_BODY", by_position["A-P-cavity"].relation_to_box_body)
+        self.assertIn("POINT_IN_CAVITY_LOOP", by_position["A-P-cavity"].evidence_codes)
+
+    def test_prefers_exported_section_loops_over_degenerate_legacy_points(self):
+        assembly = {
+            "assemblyId": "A-1",
+            "metadata": {
+                "boxSectionEvidence": {
+                    "stationLoops": [
+                        {
+                            "station": 500,
+                            "partLoops": [
+                                {
+                                    "partId": "wall",
+                                    "points": [{"u": 0, "v": 0}, {"u": 50, "v": 0}, {"u": 100, "v": 0}],
+                                    "sectionLoops": [
+                                        {"points": [{"u": 0, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 10}, {"u": 0, "v": 10}], "isClosed": True, "isValid": True, "area": 1000},
+                                        {"points": [{"u": 0, "v": 90}, {"u": 100, "v": 90}, {"u": 100, "v": 100}, {"u": 0, "v": 100}], "isClosed": True, "isValid": True, "area": 1000},
+                                        {"points": [{"u": 0, "v": 0}, {"u": 10, "v": 0}, {"u": 10, "v": 100}, {"u": 0, "v": 100}], "isClosed": True, "isValid": True, "area": 1000},
+                                        {"points": [{"u": 90, "v": 0}, {"u": 100, "v": 0}, {"u": 100, "v": 100}, {"u": 90, "v": 100}], "isClosed": True, "isValid": True, "area": 1000},
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    "source": "teklaSolidFaceSectionSegments.v2",
+                }
+            },
+            "parts": [
+                {"partId": "wall", "partPosition": "A-P-wall"},
+                _centroid_part("cavity", "A-P-cavity-new-loop", 50, 50, station_start=40, station_end=60),
+            ],
+        }
+        main_wall_groups = [
+            BoxMainMaterialSegmentGroup(
+                assembly_id="A-1",
+                group_type="BOX_MAIN_WALL_CONFIRMED_SET",
+                face_id="BOX_MAIN_WALL_CONFIRMED",
+                part_ids=["wall"],
+                part_positions=["A-P-wall"],
+                station_ranges="",
+                gap_summary="",
+                continuity_level=SegmentContinuityLevel.CONTINUOUS,
+                evidence_codes=["SECTION_VALIDATED"],
+                confidence=0.92,
+            )
+        ]
+
+        rows = classify_box_part_spatial_relations(assembly, None, main_wall_groups)
+
+        by_position = {row.part_position: row for row in rows}
+        self.assertEqual("INSIDE_BODY", by_position["A-P-cavity-new-loop"].relation_to_box_body)
+        self.assertIn("EXPORTED_SECTION_LOOP_TOPOLOGY", by_position["A-P-cavity-new-loop"].evidence_codes)
 def _projected_part(part_id, position, min_u, min_v, max_u, max_v):
     return {
         "partId": part_id,
@@ -299,7 +607,4 @@ def _centroid_part(part_id, position, u, v, station_start=0, station_end=0):
     }
 if __name__ == "__main__":
     unittest.main()
-
-
-
 

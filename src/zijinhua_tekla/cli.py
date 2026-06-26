@@ -47,6 +47,10 @@ def main(argv=None):
         print(f"Wrote {paths.manufacturing_scope_csv_path}")
         print(f"Wrote {paths.box_main_material_segments_path}")
         print(f"Wrote {paths.box_main_material_segments_csv_path}")
+        print(f"Wrote {paths.box_part_spatial_relations_path}")
+        print(f"Wrote {paths.box_part_spatial_relations_csv_path}")
+        print(f"Wrote {paths.box_station_topology_diagnostics_path}")
+        print(f"Wrote {paths.box_station_topology_diagnostics_csv_path}")
         print(f"Wrote {paths.markdown_path}")
 
 

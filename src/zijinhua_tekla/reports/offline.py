@@ -40,6 +40,10 @@ class OfflineReportPaths:
     box_main_material_segments_csv_path: Path
     box_part_spatial_relations_path: Path
     box_part_spatial_relations_csv_path: Path
+    box_station_topology_diagnostics_path: Path
+    box_station_topology_diagnostics_csv_path: Path
+    h_beam_part_sides_path: Path
+    h_beam_part_sides_csv_path: Path
     markdown_path: Path
 
     def as_tuple(self) -> tuple[Path, ...]:
@@ -64,6 +68,10 @@ class OfflineReportPaths:
             self.box_main_material_segments_csv_path,
             self.box_part_spatial_relations_path,
             self.box_part_spatial_relations_csv_path,
+            self.box_station_topology_diagnostics_path,
+            self.box_station_topology_diagnostics_csv_path,
+            self.h_beam_part_sides_path,
+            self.h_beam_part_sides_csv_path,
             self.markdown_path,
         )
 
@@ -90,6 +98,10 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
     box_main_material_segments_csv_path = out_dir / f"{member_id}-box-main-material-segment-groups.csv"
     box_part_spatial_relations_path = out_dir / f"{member_id}-box-part-spatial-relations.json"
     box_part_spatial_relations_csv_path = out_dir / f"{member_id}-box-part-spatial-relations.csv"
+    box_station_topology_diagnostics_path = out_dir / f"{member_id}-box-station-topology-diagnostics.json"
+    box_station_topology_diagnostics_csv_path = out_dir / f"{member_id}-box-station-topology-diagnostics.csv"
+    h_beam_part_sides_path = out_dir / f"{member_id}-h-beam-part-sides.json"
+    h_beam_part_sides_csv_path = out_dir / f"{member_id}-h-beam-part-sides.csv"
     md_path = out_dir / f"{member_id}-analysis.md"
 
     aligned = result.aligned_rows
@@ -145,6 +157,26 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         index=False,
         encoding="utf-8-sig",
     )
+    box_station_topology_diagnostics = [item.to_dict() for item in result.box_station_topology_diagnostics]
+    box_station_topology_diagnostics_path.write_text(
+        json.dumps(box_station_topology_diagnostics, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    pd.DataFrame(_flatten_box_station_topology_diagnostics(box_station_topology_diagnostics)).to_csv(
+        box_station_topology_diagnostics_csv_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    h_beam_part_sides = [item.to_dict() for item in result.h_beam_part_sides]
+    h_beam_part_sides_path.write_text(
+        json.dumps(h_beam_part_sides, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    pd.DataFrame(_flatten_h_beam_part_sides(h_beam_part_sides)).to_csv(
+        h_beam_part_sides_csv_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
     md_path.write_text(
         _build_markdown(
             result,
@@ -167,6 +199,10 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
             box_main_material_segments_csv_path,
             box_part_spatial_relations_path,
             box_part_spatial_relations_csv_path,
+            box_station_topology_diagnostics_path,
+            box_station_topology_diagnostics_csv_path,
+            h_beam_part_sides_path,
+            h_beam_part_sides_csv_path,
         ),
         encoding="utf-8",
     )
@@ -191,6 +227,10 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         box_main_material_segments_csv_path=box_main_material_segments_csv_path,
         box_part_spatial_relations_path=box_part_spatial_relations_path,
         box_part_spatial_relations_csv_path=box_part_spatial_relations_csv_path,
+        box_station_topology_diagnostics_path=box_station_topology_diagnostics_path,
+        box_station_topology_diagnostics_csv_path=box_station_topology_diagnostics_csv_path,
+        h_beam_part_sides_path=h_beam_part_sides_path,
+        h_beam_part_sides_csv_path=h_beam_part_sides_csv_path,
         markdown_path=md_path,
     )
 
@@ -261,6 +301,61 @@ def _flatten_box_part_spatial_relations(rows: list[dict[str, object]]) -> list[d
         }
         for row in rows
     ]
+
+
+def _flatten_box_station_topology_diagnostics(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    flattened = []
+    for row in rows:
+        loop_summaries = row.get("loop_summaries", [])
+        trigger_summaries = row.get("trigger_part_summaries", [])
+        degenerate_positions = []
+        trigger_positions = []
+        if isinstance(loop_summaries, list):
+            for loop in loop_summaries:
+                if isinstance(loop, dict) and loop.get("is_degenerate"):
+                    degenerate_positions.append(str(loop.get("part_position", "")))
+        if isinstance(trigger_summaries, list):
+            for trigger in trigger_summaries:
+                if isinstance(trigger, dict):
+                    trigger_positions.append(str(trigger.get("part_position", "")))
+        flattened.append(
+            {
+                "assembly_id": row.get("assembly_id", ""),
+                "station": row.get("station", ""),
+                "topology_status": row.get("topology_status", ""),
+                "station_scope": row.get("station_scope", ""),
+                "main_wall_loop_count": row.get("main_wall_loop_count", ""),
+                "usable_loop_count": row.get("usable_loop_count", ""),
+                "degenerate_loop_count": row.get("degenerate_loop_count", ""),
+                "union_geometry_type": row.get("union_geometry_type", ""),
+                "union_component_count": row.get("union_component_count", ""),
+                "inner_loop_count": row.get("inner_loop_count", ""),
+                "topology_area": row.get("topology_area", ""),
+                "topology_bounds": row.get("topology_bounds", ""),
+                "evidence_codes": ";".join(str(value) for value in row.get("evidence_codes", [])),
+                "degenerate_part_positions": ";".join(value for value in degenerate_positions if value),
+                "trigger_part_positions": ";".join(value for value in trigger_positions if value),
+            }
+        )
+    return flattened
+
+
+def _flatten_h_beam_part_sides(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {
+            "assembly_id": row.get("assembly_id", ""),
+            "part_id": row.get("part_id", ""),
+            "part_position": row.get("part_position", ""),
+            "part_name": row.get("part_name", ""),
+            "h_side": row.get("h_side", ""),
+            "confidence": row.get("confidence", ""),
+            "issue_category": row.get("issue_category", ""),
+            "evidence_codes": ";".join(str(value) for value in row.get("evidence_codes", [])),
+        }
+        for row in rows
+    ]
+
+
 def _build_markdown(
     result: OfflinePipelineResult,
     member_id: str,
@@ -282,6 +377,10 @@ def _build_markdown(
     box_main_material_segments_csv_path: Path,
     box_part_spatial_relations_path: Path,
     box_part_spatial_relations_csv_path: Path,
+    box_station_topology_diagnostics_path: Path,
+    box_station_topology_diagnostics_csv_path: Path,
+    h_beam_part_sides_path: Path,
+    h_beam_part_sides_csv_path: Path,
 ) -> str:
     member = result.member
     assembly = result.assembly
@@ -293,6 +392,8 @@ def _build_markdown(
     residual = [item for item in aligned if item["prediction_status"] not in {"MATCH", "MATCH_CONFLICT"}]
     spatial_counts = Counter(item.role for item in result.spatial_classifications)
     box_relation_counts = Counter(item.relation_to_box_body for item in result.box_part_spatial_relations)
+    box_topology_counts = Counter(item.topology_status for item in result.box_station_topology_diagnostics)
+    h_side_counts = Counter(item.h_side for item in result.h_beam_part_sides)
 
     lines = [
         f"# {member_id} 加工识别对齐分析",
@@ -342,6 +443,20 @@ def _build_markdown(
             "- 关系分布：" + "；".join(f"`{key}`={value}" for key, value in box_relation_counts.most_common()),
             "",
         ]
+    if result.box_station_topology_diagnostics:
+        lines += [
+            "## BOX Station Topology 诊断",
+            "",
+            "- topology 状态：" + "；".join(f"`{key}`={value}" for key, value in box_topology_counts.most_common()),
+            "",
+        ]
+    if result.h_beam_part_sides:
+        lines += [
+            "## H 钢零件侧面",
+            "",
+            "- 侧面分布：" + "；".join(f"`{key}`={value}" for key, value in h_side_counts.most_common()),
+            "",
+        ]
     if unmatched:
         lines += ["## 未匹配行", ""]
         for item in unmatched:
@@ -389,6 +504,10 @@ def _build_markdown(
         f"- BOX Main Material Segment Groups CSV：`{box_main_material_segments_csv_path}`",
         f"- BOX Part Spatial Relations JSON：`{box_part_spatial_relations_path}`",
         f"- BOX Part Spatial Relations CSV：`{box_part_spatial_relations_csv_path}`",
+        f"- BOX Station Topology Diagnostics JSON：`{box_station_topology_diagnostics_path}`",
+        f"- BOX Station Topology Diagnostics CSV：`{box_station_topology_diagnostics_csv_path}`",
+        f"- H Beam Part Sides JSON：`{h_beam_part_sides_path}`",
+        f"- H Beam Part Sides CSV：`{h_beam_part_sides_csv_path}`",
     ]
     return "\n".join(lines)
 

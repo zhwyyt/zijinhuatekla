@@ -1,3 +1,25 @@
+## Handoff - 2026-06-26 H钢位置关系阶段收敛
+
+当前仓库：`I:\zijinhuatekla`，分支 `main`，已推送到 `origin/main`。
+
+最新提交：`55e7fc3 Add H beam side and station slice classifiers`。
+
+已完成并已推送：
+
+- 新增 H 钢四侧位置关系分类器：`src/zijinhua_tekla/classifiers/h_beam_part_sides.py`。
+- 新增 H/GL station slice 主板识别：`src/zijinhua_tekla/classifiers/box_main_material_segments.py`。
+- 新增回归测试：`tests/test_h_beam_part_sides.py`、`tests/test_main_material_segments.py`。
+- 新增 H 钢、H/GL、direct H profile frame 相关验证记录。
+- 最新验证：`python -m unittest tests.test_h_beam_part_sides tests.test_main_material_segments tests.test_box_main_material_segments tests.test_pipeline_offline tests.test_reports_offline`，结果 `Ran 28 tests ... OK`；存在既有 openpyxl deprecation warning，不影响断言。
+
+本次不处理 `I:\xingcaisuanfa` 现场；导出器 direct H profile frame 已在该仓库当前分支另行提交并 push。
+
+当前 `I:\zijinhuatekla` 剩余未提交现场：主要是 2026-06-24 BOX station topology / BOX 内外关系 / offline report pipeline 相关改动，尚未收敛提交。包括：
+
+- 修改：`docs/design/2026-06-23-main-material-segment-export-contract.md`、`pyproject.toml`、`src/zijinhua_tekla/classifiers/box_part_spatial_relations.py`、`src/zijinhua_tekla/cli.py`、`src/zijinhua_tekla/pipeline/offline.py`、`src/zijinhua_tekla/quality/manufacturing_scope.py`、`src/zijinhua_tekla/reports/offline.py`、`src/zijinhua_tekla/spatial_features.py`、多组 BOX/report/pipeline 测试。
+- 未跟踪：`src/zijinhua_tekla/classifiers/box_station_topology_diagnostics.py`、`tests/test_box_station_topology_diagnostics.py`、多份 2026-06-24 BOX 验证记录、`docs/project-overview.md`、`聊天记录.md`。
+
+下一步建议：先不要继续加新规则；优先将剩余 BOX/report pipeline 现场按主题拆成 2-3 个小提交，逐个验证后再 push。不要使用 `git reset --hard` 或 `git checkout --` 清理现场，除非用户明确指定要丢弃哪些文件。
 # STATUS
 
 ## 当前阶段
@@ -57,6 +79,26 @@
 2026-06-23：按用户要求暂不细分零件角色，先新增 BOX 内外关系层 `BOX_PART_SPATIAL_RELATION`。关系分为 `MAIN_WALL/INSIDE_BODY/OUTSIDE_ATTACHMENT/BOUNDARY_OR_THROUGH/INSUFFICIENT_EVIDENCE`；已升级为用 `MAIN_WALL` 的 `sectionProjectionEvidence.projectedContour/projectedBounds` 反推真实截面围合区域，并用每个零件 `projectedCentroid` 判内外，不使用构件包围盒。真实 `20260623_144836` smoke 输出 `INSIDE_BODY=228`、`MAIN_WALL=16` Tekla 实体、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`；`T3-P-4916` 判为 `INSIDE_BODY`。
 
 2026-06-24：已将 BOX 内外关系证据升级为 Tekla solid 原生截面 station loop：导出器输出 `metadata.boxSectionEvidence.stationLoops[].partLoops[]`，station 采样为默认三刀 + 每个零件 `start/mid/end` 三点，并修正采样上限为所有零件最大 station。Python 侧按已确认主壁板 partLoops 重建各 station 主壁板轮廓，并对零件三点 station 做一致性判定；真实 `I:\zijinhuatekla\cache\20260624_092738` smoke 中主板仍保持 13 个确认编号，`T3-GG-2` 8 个实体全部由旧 `INSIDE_BODY` 修正为 `OUTSIDE_ATTACHMENT`，关系分布 `MAIN_WALL=16`、`INSIDE_BODY=185`、`OUTSIDE_ATTACHMENT=57`、`BOUNDARY_OR_THROUGH=1`。验证记录：`docs/verification/2026-06-24-box-solid-station-loop-relations.md`。
+
+
+2026-06-24：已将 BOX 内外关系层从 station 主壁板凸包升级为 Shapely 多 loop 拓扑，显式构建 outer_loop/inner_loops/cavity_geometries，新增凹形外轮廓和 inner/cavity loop 回归测试。真实 I:\zijinhuatekla\cache\20260624_092738 smoke 中主板仍保持 13 个确认编号，T3-GG-2 8 个实体仍为 OUTSIDE_ATTACHMENT；多 loop 证据下分布为 OUTSIDE_ATTACHMENT=115、INSIDE_BODY=87、MAIN_WALL=16、BOUNDARY_OR_THROUGH=41。该口径比旧凸包更严格，仍需下一步补 station 闭合失败原因和导出器显式 outer/inner 边证据。验证记录：docs/verification/2026-06-24-box-multiloop-topology.md。
+
+
+2026-06-24：针对 T3-P-6203 误入 BOUNDARY_OR_THROUGH 的问题，已停止判定层修补，改为新增 BOX station topology 诊断报告 box-station-topology-diagnostics.json/csv。真实 T3 smoke 显示 152 个 station 中 CLOSED_WITH_CAVITY=33、STATION_TOPOLOGY_NOT_CLOSED=85、CLOSED_WITHOUT_CAVITY=34；86 个 station 存在退化/invalid 主壁板 loop，115 个 station 的主壁板 union 为多组件。根因定位到导出器当前 partLoops 实际是 solid face intersection point set，不是真正闭合截面 loop，后续必须整体修复导出器为 section segments/section loops 拓扑。验证记录：docs/verification/2026-06-24-box-station-topology-export-diagnostics.md。
+
+
+2026-06-24：已整体修复 Tekla 导出器 BOX station topology 契约：`boxSectionEvidence` 从旧 point-set 升级为 `teklaSolidFaceSectionSegments.v2`，新增 station/part 级 `sectionSegments/sectionLoops/closedLoopCount/openChainCount/diagnostics`；Python 侧优先消费 exporter `sectionLoops`，再用 `segments` polygonize，最后兼容旧 `points`。新导出 `I:\zijinhuatekla\cache\20260624_144128` smoke 中 T3-5GKZ-10 拓扑由旧 `CLOSED_WITH_CAVITY=33 / STATION_TOPOLOGY_NOT_CLOSED=85` 改善为 `CLOSED_WITH_CAVITY=101 / STATION_TOPOLOGY_NOT_CLOSED=4`；`T3-P-6203` 4 个实体全部为 `INSIDE_BODY`，`T3-GG-2` 8 个实体全部为 `OUTSIDE_ATTACHMENT`，主壁板确认集合仍保持 13 个去重编号。验证记录：`docs/verification/2026-06-24-box-section-segment-topology-exporter-v2.md`。
+
+
+2026-06-24：继续追查 section segment v2 后剩余 4 个不闭合 station，确认根因不是退化 loop，也不是导出器未闭合，而是所有零件 start/mid/end 采样带入了端部/附件触发 station。`T3-P-4919` 仍是确认主壁板；四个 station 位于该实体导出 solid 覆盖尾端 `axisStationEnd=10452.706` 之后，只有 `T3-P-4918 + 两个 T3-P-4917` 主壁板参与；同 station 的 `T3-P-4889/PL16` 虽有大面积 loop，但 `normalProjectionMagnitude=0.168825`，属于端部/过渡板证据，不应硬塞主壁板集合，也不代表 `T3-P-4919` 主板身份变化。诊断层已新增 `station_scope`，将 4 个 station 标为 `END_TRANSITION_NOT_BODY_CORE`；最新 smoke 分布为 `CLOSED_WITH_CAVITY=101`、`CLOSED_WITHOUT_CAVITY=47`、`END_TRANSITION_NOT_BODY_CORE=4`，核心 BODY station 不再有 topology failure。
+
+
+2026-06-24：针对新选中构件 `T3-5GKZ-2` 主壁板只识别 4 个 seed 的回归，已定位为 BOX 主壁板 axis 扩展准入仍只接受旧 `wall_candidate/COLUMN` 口径，导致新导出器中的 `flange_candidate/web_candidate + isBodyWallPlateCandidate=true` 后续主板被挡在 station 连续判断之前。已修正为先要求 `isBodyWallPlateCandidate=true`，再接受 `wall_candidate/flange_candidate/web_candidate` 角色；不写死零件号。新 smoke 输出 16 个主壁板实体，包含用户指出的 `T3-P-4895/T3-P-4897/T3-P-4899/T3-P-4907`，并继续扩到中段/上段主板；T3-5GKZ-10 回归仍为 13 个唯一确认主板编号。验证记录：`docs/verification/2026-06-24-box-main-wall-axis-expansion-regression.md`。
+
+2026-06-24：按用户要求基于新导出做全项目链路核对，发现并补齐两个遗漏：CLI 未打印 `box-part-spatial-relations` 与 `box-station-topology-diagnostics` 报告路径；reports/pipeline 测试未锁定 station topology 输出与 result 传播。已补 CLI、`tests/test_reports_offline.py`、`tests/test_pipeline_offline.py`，并将 `metadata.boxSectionEvidence.source=teklaSolidFaceSectionSegments.v2`、station/part `sectionLoops/sectionSegments/segments` 写入导出契约。真实 `T3-5GKZ-2` 与 `T3-5GKZ-10` smoke 均输出完整 23 个报告文件；全量单测 78 tests OK。验证记录：`docs/verification/2026-06-24-new-export-contract-project-audit.md`。
+
+2026-06-24：按用户澄清完成新导出契约全项目迁移审计，不再只核对 BOX 主板。已修复三类旧契约依赖：BOX 主壁板 seed 现在优先消费 `metadata.boxSectionEvidence.stationLoops[].partLoops[].sectionLoops/segments`，旧 `member.Samples/SectionParts` 仅作 fallback；拓扑 seed 增加长轴向壁板候选与 `normalProjectionMagnitude` 过滤，避免短端部/附件 loop 被误吸进主材集合；附属件簇主体边界由 offline pipeline 传入已确认主壁板 ids，旧 `Classification.PartRoles/mainPartId` 仅作 fallback。回归 smoke：T3-5GKZ-2 主壁板 16 个实体/13 个唯一编号，保留 `T3-P-4897/T3-P-4895/T3-P-4907/T3-P-4899`；T3-5GKZ-10 主壁板 16 个实体/13 个唯一编号，missing/extra 为空，`T3-P-4918` 纳入、`T3-P-4916` 排除。验证记录：`docs/verification/2026-06-24-new-export-contract-project-audit.md`。
+2026-06-24：按用户截图复核修正 BOX 内外关系纯几何判定：`T3-5GKZ-8` 中 16 个原 `BOUNDARY_OR_THROUGH` 实体实际位于主壁板内腔。根因是 start/mid/end 采样时选到只有局部单片壁板的 station topology，并把局部 `CLOSED_WITHOUT_CAVITY` 当成完整 BOX 截面判外侧。已改为存在完整 cavity station 参照时，跳过面积小于完整闭合截面 75% 的局部不完整 station，只用几何拓扑判断内腔/外侧，不依赖编号、名称或业务标签。新 smoke 中 T3-5GKZ-8 分布 `INSIDE_BODY=165`、`OUTSIDE_ATTACHMENT=58`、`MAIN_WALL=16`、`BOUNDARY_OR_THROUGH=0`；16 个目标实体全部为 `INSIDE_BODY`。T3-5GKZ-10 回归仍保留 `BOUNDARY_OR_THROUGH=2`。验证记录：`docs/verification/2026-06-24-box-internal-cavity-geometry-fix.md`。
 
 ## 已确认业务口径
 
@@ -123,9 +165,11 @@
 - BOX 截面内外证据验证：`docs/verification/2026-06-23-box-section-evidence.md`
 - BOX 截面投影导出字段验证：`docs/verification/2026-06-23-section-projection-exporter.md`
 - BOX 截面采样主材算法升级验证：`docs/verification/2026-06-23-section-sample-main-material-upgrade.md`
-- BOX 外轮廓 trace 验证：docs/verification/2026-06-23-box-wall-trace.md`r
-- BOX 主壁板确认集合验证：docs/verification/2026-06-23-box-main-wall-confirmed-set.md`r
+- BOX 外轮廓 trace 验证：docs/verification/2026-06-23-box-wall-trace.md
+- BOX 主壁板确认集合验证：docs/verification/2026-06-23-box-main-wall-confirmed-set.md
 - BOX 内外关系层验证：`docs/verification/2026-06-23-box-part-spatial-relations.md`
+- BOX station topology 诊断：`docs/verification/2026-06-24-box-station-topology-export-diagnostics.md`
+- BOX section segment topology 导出器 v2 验证：`docs/verification/2026-06-24-box-section-segment-topology-exporter-v2.md`
 - Case Bank 种子案例：`cases\seed.json`
 - 输出：`outputs\T3-5GKZ-10-analysis.md`
 - 算法抽取 smoke 输出：`outputs\algorithm-extraction-smoke-20260617\T3-5GKZ-10-analysis.md`
@@ -180,18 +224,4 @@
 - BOX 内外关系层后单元测试：`python -m unittest discover -s tests`，70 tests OK。存在 `openpyxl` 的 `datetime.utcnow()` DeprecationWarning，不影响当前测试结果。
 - BOX 内外关系层 T3 smoke：`python -m zijinhua_tekla.cli analyze --root I:\xingcaisuanfa\cache\20260623_144836 --truth-root I:\xingcaisuanfa\cache\20260615_161938 --member-id T3-5GKZ-10 --out outputs\box-part-spatial-relations-smoke-20260623-v3`；新增 `box-part-spatial-relations.json/csv`，分布 `INSIDE_BODY=228`、`MAIN_WALL=16`、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`。
 - T3 空间诊断：附属件簇 `15`，`Bracket=2`，`Unknown=13`。
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

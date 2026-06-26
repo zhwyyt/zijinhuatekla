@@ -17,7 +17,8 @@
 - [x] 将主材分段算法上抽为统一入口，并接入 H/GL 梁策略与 BOX fallback。
 - [x] 补 Python 侧 BOX 截面候选证据，派生 WALL_CORE/OUTER_ATTACHMENT/INNER_STIFFENER_OR_DIAPHRAGM/UNKNOWN 并接入主材分段 evidence summary。
 - [x] 建立 BOX 内外关系层 `BOX_PART_SPATIAL_RELATION`，先区分 `MAIN_WALL/INSIDE_BODY/OUTSIDE_ATTACHMENT/BOUNDARY_OR_THROUGH/INSUFFICIENT_EVIDENCE`，不在本阶段细分零件角色。已升级为 Tekla solid 原生 station loop + 每零件 start/mid/end 三点判定。
-- [ ] 继续提升统一主材分段算法：H/GL 减少对 name 的依赖，BOX 已形成闭合截面外轮廓 trace 种子、主轴 station 连续扩展和截面复核的最终确认集合，下一步需要导出更多 station samples 稳定四壁板 face chains、降低对 Case Bank 反馈的依赖；T 型/十字/圆管新增策略，并将报告文件名迁移为通用 `main-material-segment-groups`。
+- [x] 修正 BOX 内腔纯几何判定：跳过局部不完整 station topology，避免内腔竖向板/横板被误判为 `BOUNDARY_OR_THROUGH`；T3-5GKZ-8 的 16 个目标实体已全部回到 `INSIDE_BODY`，T3-5GKZ-10 仍保留真实边界候选。
+- [ ] 继续提升统一主材分段算法：H/GL 减少对 name 的依赖；BOX 已形成闭合截面外轮廓 trace 种子、主轴 station 连续扩展和截面复核的最终确认集合，并修复 `T3-5GKZ-2` 中 seed 后续 `flange_candidate/web_candidate` 主板段未扩展的问题；下一步继续稳定四壁板 face chains、降低对 Case Bank 反馈的依赖；T 型/十字/圆管新增策略，并将报告文件名迁移为通用 `main-material-segment-groups`。
 - [x] 固化普通零件编号精准一致硬约束，禁止几何相似自动匹配。
 - [ ] 建立缺失/冲突零件复核工具：全模型搜索、候选排序、几何候选复核报告。
 - [x] 建立 `PartFeatureSnapshot` 契约，承接 `I:\autoweb\teklatest` 的零件特征提取结果。
@@ -28,7 +29,7 @@
 - [x] 建立 bundle/member 到 `AppendageClusterFeatures` 的空间特征适配层。
 - [x] 建立架构层级骨架：`architecture`、`quality`、`pipeline`。
 - [x] 在导出器补 `sectionProjectionEvidence` 截面投影证据，替代异形 BOX 内外判断对包围盒/径向分桶的依赖。
-- [ ] 补 `MemberBodyClassifier` 的截面 trace、station topology、closed loop 消费逻辑；BOX 内外关系已先接入 Tekla solid station loop，后续需补真正多 loop 拓扑和内腔 loop 输出。
+- [x] 补 `MemberBodyClassifier` 的截面 trace、station topology、closed loop 消费逻辑；BOX 内外关系已接入 Shapely 多 loop 拓扑和内腔 loop 输出，并新增 station topology diagnostics。已整体修复导出器：输出 `sectionSegments/sectionLoops`，替代旧退化 point set。
 - [x] 建立 `adapters` 包，并把 Tekla bundle/member/Excel 读取从 CLI 迁入。
 - [x] 建立 `reports` 包，并把 CSV/JSON/Markdown 输出从 CLI 迁入。
 - [x] 建立 `classifiers` 包门面，逐步包住现有 `member_classifier`、`part_roles`、`bracket_classifier`。
@@ -59,3 +60,22 @@
 
 
 
+
+
+
+- [x] 继续处理 BOX 末端 4 个 `STATION_TOPOLOGY_NOT_CLOSED` station：已归因为端部/附件触发 station，新增 `station_scope=END_TRANSITION_OR_ATTACHMENT_TRIGGERED` 与 `END_TRANSITION_NOT_BODY_CORE`，不再误报核心 BOX 截面失败。
+
+
+- [x] 新导出契约全链路核对：已补齐 CLI 报告打印、offline report/pipeline 测试、section segment v2 设计契约；继续迁移旧契约消费者，BOX 主壁板 seed 优先用 `boxSectionEvidence.sectionLoops/segments`，附属件簇主体边界优先用确认主壁板 ids，制造范围/拓扑诊断优先用新 station/loop 字段；已用 T3-5GKZ-2/T3-5GKZ-10 smoke 验证完整报告输出和主壁板回归。
+
+
+
+## 现场收敛待办 - 2026-06-26
+
+- [x] H 钢位置关系阶段已收敛并推送：`55e7fc3 Add H beam side and station slice classifiers`。
+- [x] H 钢 direct profile frame 导出器已在 `I:\xingcaisuanfa` 另行提交并 push，本仓库本轮不继续处理 xingcaisuanfa。
+- [ ] 收敛剩余 BOX station topology / BOX 内外关系现场：核对 `box_part_spatial_relations.py`、`box_station_topology_diagnostics.py`、相关 BOX 测试和 2026-06-24 验证记录。
+- [ ] 收敛剩余 offline report/pipeline 现场：核对 `cli.py`、`pipeline/offline.py`、`reports/offline.py`、`tests/test_pipeline_offline.py`、`tests/test_reports_offline.py`。
+- [ ] 判断 `pyproject.toml` 新增依赖和 `docs/design/2026-06-23-main-material-segment-export-contract.md` 修改是否属于 BOX topology 提交范围。
+- [ ] 对未跟踪文件分组：BOX 验证记录保留并提交；`聊天记录.md`、`docs/project-overview.md` 需人工确认是否入库。
+- [ ] 每个收敛提交前运行最小相关测试；最终再跑 `python -m unittest discover -s tests` 或当前可行的完整测试集合。

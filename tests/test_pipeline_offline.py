@@ -54,6 +54,34 @@ class OfflinePipelineTests(unittest.TestCase):
                             {
                                 "assemblyId": "100",
                                 "mainPartId": "1",
+                                "metadata": {
+                                    "boxSectionEvidence": {
+                                        "source": "teklaSolidFaceSectionSegments.v2",
+                                        "stationLoops": [
+                                            {
+                                                "station": 100,
+                                                "supportPartIds": ["1", "10"],
+                                                "partLoops": [
+                                                    {
+                                                        "partId": "1",
+                                                        "sectionLoops": [
+                                                            {
+                                                                "points": [
+                                                                    {"u": 0, "v": 0},
+                                                                    {"u": 500, "v": 0},
+                                                                    {"u": 500, "v": 500},
+                                                                    {"u": 0, "v": 500}
+                                                                ],
+                                                                "isClosed": True,
+                                                                "isValid": True,
+                                                            }
+                                                        ],
+                                                    }
+                                                ],
+                                            }
+                                        ],
+                                    }
+                                },
                                 "parts": [
                                     {
                                         "partId": "1",
@@ -164,7 +192,123 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual("MAIN_WALL", relation_by_position["A-P-1"].relation_to_box_body)
         self.assertEqual("INSIDE_BODY", relation_by_position["A-BR-ROOT"].relation_to_box_body)
         self.assertEqual("OUTSIDE_ATTACHMENT", relation_by_position["A-BR-RIB"].relation_to_box_body)
+        self.assertEqual(1, len(result.box_station_topology_diagnostics))
+        self.assertEqual("CLOSED_WITHOUT_CAVITY", result.box_station_topology_diagnostics[0].topology_status)
+
+    def test_run_offline_analysis_outputs_h_beam_part_sides_for_gl_member(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            cache_root = root / "cache"
+            truth_root = root / "truth"
+            (cache_root / "members").mkdir(parents=True)
+            truth_root.mkdir()
+            (cache_root / "members" / "member_A-GL-1.json").write_text(
+                json.dumps(
+                    {
+                        "Member": {"Name": "A-GL-1", "AssemblyId": "200"},
+                        "Classification": {
+                            "KeyDimensionsDisplay": "BH500*200*10*14",
+                            "Confidence": 90,
+                            "PartRoles": [],
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            (cache_root / "tekla-body-bracket-export.bundle.json").write_text(
+                json.dumps(
+                    {
+                        "assemblies": [
+                            {
+                                "assemblyId": "200",
+                                "mainPartId": "top",
+                                "metadata": {"assemblyPosition": "A-GL-1"},
+                                "parts": [
+                                    _projected_part("top", "A-P-top", "上翼缘", -100, 100, 0, 14),
+                                    _projected_part("web", "A-P-web", "腹板", -6, 6, -500, 0),
+                                    _projected_part("bottom", "A-P-bottom", "下翼缘", -100, 100, -514, -500),
+                                    _projected_part("lift", "A-P-lift", "吊耳", -20, 20, 20, 90),
+                                    _projected_part("left", "A-P-left", "加劲板", -90, -20, -430, -120),
+                                ],
+                                "relationships": [],
+                            }
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            pd.DataFrame(
+                [
+                    [
+                        "A-GL-1",
+                        "A-P-top",
+                        "PL14*200",
+                        1000,
+                        1,
+                        1.0,
+                        1.0,
+                        "Q355B",
+                        "",
+                        "下料",
+                        "方块",
+                        "",
+                        "",
+                        "",
+                        1.0,
+                        1.0,
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        1,
+                    ]
+                ]
+            ).to_excel(truth_root / "T3楼五节柱零构件清单(1).xls", sheet_name="Θ零件清单Θ", header=False, index=False)
+
+            result = run_offline_analysis(cache_root, truth_root, "A-GL-1")
+
+        by_position = {row.part_position: row for row in result.h_beam_part_sides}
+        self.assertEqual("TOP_FLANGE_OUTER", by_position["A-P-lift"].h_side)
+        self.assertEqual("WEB_LEFT", by_position["A-P-left"].h_side)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _projected_part(part_id, position, name, min_u, max_u, min_v, max_v):
+    return {
+        "partId": part_id,
+        "partPosition": position,
+        "name": name,
+        "profileString": "PL10",
+        "length": 100,
+        "thickness": 10,
+        "centroid": {"x": 0.0, "y": 0.0, "z": 0.0},
+        "boundingBox": {
+            "min": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "max": {"x": 100.0, "y": 100.0, "z": 10.0},
+        },
+        "obbDims": {"x": 100.0, "y": 100.0, "z": 10.0},
+        "mainMaterialEvidence": {
+            "axisStationStart": 0,
+            "axisStationEnd": 1000,
+            "axisStationLength": 1000,
+            "bodyFaceId": "H_FACE",
+            "isBodyWallPlateCandidate": True,
+            "sectionProjectionEvidence": {
+                "projectedCentroid": {"u": (min_u + max_u) / 2, "v": (min_v + max_v) / 2},
+                "projectedBoundsMin": {"u": min_u, "v": min_v},
+                "projectedBoundsMax": {"u": max_u, "v": max_v},
+                "projectedContour": [
+                    {"u": min_u, "v": min_v},
+                    {"u": max_u, "v": min_v},
+                    {"u": max_u, "v": max_v},
+                    {"u": min_u, "v": max_v},
+                ],
+            },
+        },
+    }

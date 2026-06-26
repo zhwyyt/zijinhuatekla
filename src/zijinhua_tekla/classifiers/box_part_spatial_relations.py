@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from shapely.geometry import GeometryCollection, LineString, MultiPolygon, Point, Polygon
+from shapely.ops import polygonize, unary_union
 from ..rules import as_float, text
 from .box_main_material_segments import BoxMainMaterialSegmentGroup
 
@@ -121,6 +123,25 @@ def _classify_part(
             connected_main_wall_ids,
             ["PROJECTED_CENTROID_MIXED_ACROSS_STATION_LOOPS"],
             0.78,
+            evidence_summary=evidence_summary,
+        )
+
+    if projection_relation == "cavity":
+        codes = ["PROJECTED_CENTROID_INSIDE_MAIN_WALL_ENCLOSURE", "POINT_IN_CAVITY_LOOP"]
+        if enclosure and enclosure.get("source"):
+            codes.append(text(enclosure.get("source")))
+        if connected_main_wall_ids:
+            codes.append("CONNECTED_TO_MAIN_WALL")
+        return _relation(
+            assembly_id,
+            part_id,
+            part_position,
+            "INSIDE_BODY",
+            station_range,
+            "projected_centroid_in_cavity_loop",
+            connected_main_wall_ids,
+            codes,
+            0.92,
             evidence_summary=evidence_summary,
         )
 
@@ -254,9 +275,11 @@ def _relation(
 
 
 def _main_wall_projected_enclosure(assembly: dict[str, Any], member: dict[str, Any] | None, main_wall_ids: set[str]) -> dict[str, Any] | None:
-    exported_loop = _exported_outer_loop(assembly, member, main_wall_ids)
+    station_loops = _exported_station_main_wall_loops(assembly, main_wall_ids)
+    exported_topology = _exported_outer_loop(assembly, member, station_loops)
+    exported_loop = exported_topology.get("outer_loop", [])
     if len(exported_loop) >= 3:
-        return {"kind": "polygon", "outer_loop": exported_loop, "station_loops": _exported_station_main_wall_loops(assembly, main_wall_ids), "source": "EXPORTED_BOX_OUTER_LOOP_POLYGON"}
+        return {"kind": "polygon", "outer_loop": exported_loop, "station_loops": station_loops, "source": text(exported_topology.get("source")) or "EXPORTED_BOX_OUTER_LOOP_POLYGON"}
 
     points: list[tuple[float, float]] = []
     for part in assembly.get("parts", []):
@@ -284,28 +307,26 @@ def _main_wall_projected_enclosure(assembly: dict[str, Any], member: dict[str, A
     }
 
 
-def _exported_outer_loop(assembly: dict[str, Any], member: dict[str, Any] | None, main_wall_ids: set[str]) -> list[tuple[float, float]]:
+def _exported_outer_loop(assembly: dict[str, Any], member: dict[str, Any] | None, station_topologies: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     metadata = assembly.get("metadata", {})
     evidence = metadata.get("boxSectionEvidence", {}) if isinstance(metadata, dict) else {}
     candidates = []
+    if station_topologies:
+        best = max(station_topologies, key=lambda item: _polygon_area(item.get("outer_loop", [])))
+        loop = best.get("outer_loop", []) if isinstance(best, dict) else []
+        if isinstance(loop, list) and len(loop) >= 3:
+            return {"outer_loop": loop, "source": text(best.get("source")) or "SHAPELY_BOX_SECTION_TOPOLOGY"}
     if isinstance(evidence, dict):
-        main_wall_loop = _outer_loop_from_station_part_loops(evidence, main_wall_ids)
-        if len(main_wall_loop) >= 3:
-            return main_wall_loop
-        candidates.append(evidence.get("outerLoop"))
+        candidates.append((evidence.get("outerLoop"), "EXPORTED_BOX_OUTER_LOOP_POLYGON"))
     for sample in (member or {}).get("Samples", []) or []:
         features = sample.get("SectionFeatures", {}) if isinstance(sample, dict) else {}
         if isinstance(features, dict):
-            candidates.append(features.get("OuterLoop") or features.get("outerLoop"))
-    for candidate in candidates:
+            candidates.append((features.get("OuterLoop") or features.get("outerLoop"), "MEMBER_SECTION_FEATURE_OUTER_LOOP"))
+    for candidate, source in candidates:
         loop = _parse_loop_points(candidate)
         if len(loop) >= 3:
-            return loop
-    return []
-
-
-
-
+            return {"outer_loop": loop, "source": source}
+    return {"outer_loop": [], "source": ""}
 
 
 def _exported_station_main_wall_loops(assembly: dict[str, Any], main_wall_ids: set[str]) -> list[dict[str, Any]]:
@@ -318,35 +339,144 @@ def _exported_station_main_wall_loops(assembly: dict[str, Any], main_wall_ids: s
     for station in station_loops:
         if not isinstance(station, dict):
             continue
-        points: list[tuple[float, float]] = []
-        for part_loop in station.get("partLoops", []) or []:
-            if not isinstance(part_loop, dict) or text(part_loop.get("partId")) not in main_wall_ids:
-                continue
-            points.extend(_parse_loop_points(part_loop.get("points")))
-        loop = _convex_hull(points)
-        if len(loop) >= 3:
-            result.append({"station": as_float(station.get("station")), "outer_loop": loop})
+        topology = _station_topology_from_part_loops(station.get("partLoops", []), main_wall_ids)
+        if topology:
+            topology["station"] = as_float(station.get("station"))
+            result.append(topology)
     return result
-def _outer_loop_from_station_part_loops(evidence: dict[str, Any], main_wall_ids: set[str]) -> list[tuple[float, float]]:
-    station_loops = evidence.get("stationLoops", [])
-    if not isinstance(station_loops, list):
-        return []
-    best_loop: list[tuple[float, float]] = []
-    best_area = 0.0
-    for station in station_loops:
-        if not isinstance(station, dict):
+
+
+def _station_topology_from_part_loops(part_loops: Any, main_wall_ids: set[str]) -> dict[str, Any] | None:
+    wall_polygons = []
+    source = "SHAPELY_BOX_SECTION_TOPOLOGY"
+    if not isinstance(part_loops, list):
+        return None
+    for part_loop in part_loops:
+        if not isinstance(part_loop, dict) or text(part_loop.get("partId")) not in main_wall_ids:
             continue
-        points: list[tuple[float, float]] = []
-        for part_loop in station.get("partLoops", []) or []:
-            if not isinstance(part_loop, dict) or text(part_loop.get("partId")) not in main_wall_ids:
-                continue
-            points.extend(_parse_loop_points(part_loop.get("points")))
-        loop = _convex_hull(points)
-        area = _polygon_area(loop)
-        if len(loop) >= 3 and area > best_area:
-            best_loop = loop
-            best_area = area
-    return best_loop
+        loop_polygons = _polygons_from_exported_section_loops(part_loop.get("sectionLoops"))
+        if loop_polygons:
+            wall_polygons.extend(loop_polygons)
+            source = "EXPORTED_SECTION_LOOP_TOPOLOGY"
+            continue
+        segment_polygons = _polygons_from_exported_segments(part_loop.get("segments"))
+        if segment_polygons:
+            wall_polygons.extend(segment_polygons)
+            source = "EXPORTED_SECTION_SEGMENT_POLYGONIZE"
+            continue
+        polygon = _usable_polygon_from_points(_parse_loop_points(part_loop.get("points")))
+        if polygon is not None:
+            wall_polygons.append(polygon)
+    if not wall_polygons:
+        return None
+    wall_union = unary_union(wall_polygons)
+    body_geometry = _body_polygon_from_wall_union(wall_union)
+    if body_geometry is None:
+        return None
+    outer_loop = _polygon_exterior_points(body_geometry)
+    inner_loops = [_linear_ring_points(ring) for ring in body_geometry.interiors]
+    return {
+        "outer_loop": outer_loop,
+        "inner_loops": inner_loops,
+        "geometry": body_geometry,
+        "cavity_geometries": [Polygon(loop) for loop in inner_loops if len(loop) >= 3],
+        "source": source,
+    }
+
+
+def _polygons_from_exported_section_loops(section_loops: Any) -> list[Polygon]:
+    polygons = []
+    if not isinstance(section_loops, list):
+        return polygons
+    for section_loop in section_loops:
+        if not isinstance(section_loop, dict):
+            continue
+        if section_loop.get("isClosed") is False or section_loop.get("isValid") is False:
+            continue
+        polygon = _usable_polygon_from_points(_parse_loop_points(section_loop.get("points")))
+        if polygon is not None:
+            polygons.append(polygon)
+    return polygons
+
+
+def _polygons_from_exported_segments(segments: Any) -> list[Polygon]:
+    if not isinstance(segments, list):
+        return []
+    lines = []
+    for segment in segments:
+        if not isinstance(segment, dict):
+            continue
+        start = _parse_section_point(segment.get("start"))
+        end = _parse_section_point(segment.get("end"))
+        if start is None or end is None or start == end:
+            continue
+        lines.append(LineString([start, end]))
+    polygons = []
+    for polygon in polygonize(lines):
+        usable = _usable_polygon_from_points(_polygon_exterior_points(polygon))
+        if usable is not None:
+            polygons.append(usable)
+    return polygons
+
+
+def _usable_polygon_from_points(points: list[tuple[float, float]]) -> Polygon | None:
+    if len(points) < 3:
+        return None
+    polygon = Polygon(points)
+    if not polygon.is_valid:
+        polygon = polygon.buffer(0)
+    if polygon.is_empty or polygon.area <= 1e-6:
+        return None
+    return polygon
+
+
+def _parse_section_point(value: Any) -> tuple[float, float] | None:
+    if not isinstance(value, dict):
+        return None
+    return (as_float(value.get("u")), as_float(value.get("v")))
+
+
+def _body_polygon_from_wall_union(wall_union: Any) -> Polygon | None:
+    shell_polygon = _largest_polygon(wall_union)
+    if shell_polygon is None:
+        return None
+    minx, miny, maxx, maxy = shell_polygon.bounds
+    span = max(maxx - minx, maxy - miny)
+    repair_distance = max(2.0, span * 0.02)
+    repaired = wall_union.buffer(repair_distance, join_style=2).buffer(-repair_distance, join_style=2)
+    candidate = _largest_polygon(repaired)
+    if candidate is None:
+        return shell_polygon
+    if candidate.area < shell_polygon.area:
+        return shell_polygon
+    return candidate
+
+
+def _largest_polygon(geometry: Any) -> Polygon | None:
+    if isinstance(geometry, Polygon):
+        return geometry
+    if isinstance(geometry, MultiPolygon):
+        polygons = [polygon for polygon in geometry.geoms if polygon.area > 1e-6]
+        return max(polygons, key=lambda polygon: polygon.area) if polygons else None
+    if isinstance(geometry, GeometryCollection):
+        polygons = [polygon for polygon in geometry.geoms if isinstance(polygon, Polygon) and polygon.area > 1e-6]
+        return max(polygons, key=lambda polygon: polygon.area) if polygons else None
+    return None
+
+
+def _linear_ring_points(ring: Any) -> list[tuple[float, float]]:
+    coords = list(ring.coords)
+    if coords and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    return [(float(u), float(v)) for u, v in coords]
+
+
+def _polygon_exterior_points(polygon: Polygon) -> list[tuple[float, float]]:
+    coords = list(polygon.exterior.coords)
+    if coords and coords[0] == coords[-1]:
+        coords = coords[:-1]
+    return [(float(u), float(v)) for u, v in coords]
+
 
 
 def _convex_hull(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -408,6 +538,8 @@ def _projected_enclosure_relation(part: dict[str, Any], enclosure: dict[str, Any
         if station_relations:
             unique = set(station_relations)
             if len(unique) > 1:
+                if unique <= {"inside", "cavity", "boundary"}:
+                    return "cavity" if "cavity" in unique else "inside"
                 return "mixed"
             return station_relations[0]
         loop = enclosure.get("outer_loop", [])
@@ -428,11 +560,52 @@ def _station_loop_relations(part: dict[str, Any], enclosure: dict[str, Any], poi
         return []
     result = []
     for station in _part_probe_stations(part):
-        nearest = min(station_loops, key=lambda item: abs(as_float(item.get("station")) - station))
-        loop = nearest.get("outer_loop", []) if isinstance(nearest, dict) else []
-        if isinstance(loop, list) and loop:
-            result.append("inside" if _point_in_polygon(point, loop) else "outside")
+        nearest = _nearest_usable_station_topology(station_loops, station)
+        relation = _point_relation_to_station_topology(point, nearest)
+        if relation == "outside" and not nearest.get("inner_loops"):
+            reference_loop = enclosure.get("outer_loop", [])
+            station_loop = nearest.get("outer_loop", []) if isinstance(nearest, dict) else []
+            reference_area = _polygon_area(reference_loop) if isinstance(reference_loop, list) else 0.0
+            station_area = _polygon_area(station_loop) if isinstance(station_loop, list) else 0.0
+            if station_area >= reference_area * 0.75 and isinstance(reference_loop, list) and _point_in_polygon(point, reference_loop):
+                relation = "inside"
+        if relation:
+            result.append(relation)
     return result
+
+
+def _nearest_usable_station_topology(station_loops: list[dict[str, Any]], station: float) -> dict[str, Any]:
+    ordered = sorted(station_loops, key=lambda item: abs(as_float(item.get("station")) - station))
+    with_cavity = [item for item in ordered if item.get("inner_loops")]
+    if with_cavity:
+        cavity_reference_area = max(_polygon_area(item.get("outer_loop", [])) for item in with_cavity)
+        complete_like = [
+            item
+            for item in ordered
+            if item.get("inner_loops") or _polygon_area(item.get("outer_loop", [])) >= cavity_reference_area * 0.75
+        ]
+        if complete_like:
+            return complete_like[0]
+    return ordered[0]
+
+
+def _point_relation_to_station_topology(point: tuple[float, float], topology: dict[str, Any]) -> str:
+    geometry = topology.get("geometry") if isinstance(topology, dict) else None
+    if geometry is not None:
+        probe = Point(point)
+        if geometry.boundary.distance(probe) <= 1e-6:
+            return "boundary"
+        for cavity in topology.get("cavity_geometries", []) or []:
+            if cavity.covers(probe):
+                return "cavity"
+        if geometry.covers(probe):
+            return "inside"
+        return "outside"
+    loop = topology.get("outer_loop", []) if isinstance(topology, dict) else []
+    if isinstance(loop, list) and loop:
+        return "inside" if _point_in_polygon(point, loop) else "outside"
+    return ""
+
 
 
 def _part_probe_stations(part: dict[str, Any]) -> list[float]:
@@ -622,10 +795,4 @@ def _insufficient_evidence_codes(member_part: dict[str, Any]) -> list[str]:
     if _outer_side_candidate(member_part):
         codes.append("OUTER_SIDE_GEOMETRY_HINT_AUXILIARY")
     return codes
-
-
-
-
-
-
 
