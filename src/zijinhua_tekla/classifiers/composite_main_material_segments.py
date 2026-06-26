@@ -65,8 +65,135 @@ class CompositeMainMaterialSegment:
         }
 
 
+@dataclass(frozen=True)
+class _StationSnapshot:
+    station: float
+    segment_type: CompositeSegmentType
+    active_part_ids: list[str]
+    evidence_codes: list[str]
+
+
 def classify_composite_main_material_segments(
     assembly: dict[str, Any],
     member: dict[str, Any] | None = None,
 ) -> list[CompositeMainMaterialSegment]:
-    return []
+    snapshots = _station_snapshots(assembly)
+    if not snapshots:
+        return []
+    return _merge_snapshots_into_segments(str(assembly.get("assemblyId", "")), snapshots, assembly)
+
+
+def _station_snapshots(assembly: dict[str, Any]) -> list[_StationSnapshot]:
+    parts = [part for part in assembly.get("parts", []) if _is_main_candidate(part)]
+    station_loops = (
+        assembly.get("metadata", {})
+        .get("boxSectionEvidence", {})
+        .get("stationLoops", [])
+    )
+    snapshots = []
+    for station_loop in station_loops:
+        station = float(station_loop.get("station", 0.0))
+        active = [part for part in parts if _part_active_at(part, station)]
+        segment_type = _classify_station_type(station_loop, active)
+        snapshots.append(
+            _StationSnapshot(
+                station=station,
+                segment_type=segment_type,
+                active_part_ids=[str(part.get("partId", "")) for part in active],
+                evidence_codes=["STATION_REGIME_CLASSIFIED"],
+            )
+        )
+    return sorted(snapshots, key=lambda item: item.station)
+
+
+def _classify_station_type(
+    station_loop: dict[str, Any],
+    active_parts: list[dict[str, Any]],
+) -> CompositeSegmentType:
+    if int(station_loop.get("closedLoopCount") or 0) > 0:
+        return CompositeSegmentType.BOX_CLOSED_SECTION
+    normal_axes = {_normal_axis(part) for part in active_parts}
+    has_cross_core = "X" in normal_axes and "Y" in normal_axes
+    has_outer_flange = any(_is_outer_offset(part) for part in active_parts)
+    has_box_forming = sum(1 for part in active_parts if _is_box_forming_candidate(part)) >= 2
+    if has_cross_core and has_box_forming:
+        return CompositeSegmentType.CROSS_TO_BOX_TRANSITION
+    if has_cross_core and has_outer_flange:
+        return CompositeSegmentType.CROSS_CORE_WITH_FLANGES
+    if has_box_forming:
+        return CompositeSegmentType.PARTIAL_BOX_FORMING
+    return CompositeSegmentType.MIXED_OR_INSUFFICIENT_EVIDENCE
+
+
+def _merge_snapshots_into_segments(
+    assembly_id: str,
+    snapshots: list[_StationSnapshot],
+    assembly: dict[str, Any],
+) -> list[CompositeMainMaterialSegment]:
+    result = []
+    group_start = 0
+    for index in range(1, len(snapshots) + 1):
+        if index < len(snapshots) and snapshots[index].segment_type == snapshots[group_start].segment_type:
+            continue
+        first = snapshots[group_start]
+        last = snapshots[index - 1]
+        station_start = first.station
+        station_end = last.station
+        if index < len(snapshots):
+            station_end = snapshots[index].station
+        result.append(
+            CompositeMainMaterialSegment(
+                assembly_id=assembly_id,
+                segment_id=f"S{len(result) + 1}",
+                station_start=station_start,
+                station_end=station_end,
+                segment_type=first.segment_type,
+                main_plates=[],
+                confidence=0.75,
+                evidence_codes=["STATION_REGIME_SEGMENT"],
+            )
+        )
+        group_start = index
+    return result
+
+
+def _is_main_candidate(part: dict[str, Any]) -> bool:
+    return part.get("mainMaterialEvidence", {}).get("isBodyWallPlateCandidate") is True
+
+
+def _part_active_at(part: dict[str, Any], station: float) -> bool:
+    evidence = part.get("mainMaterialEvidence", {})
+    start = float(evidence.get("axisStationStart") or 0.0)
+    end = float(evidence.get("axisStationEnd") or 0.0)
+    return start <= station <= end
+
+
+def _normal_axis(part: dict[str, Any]) -> str:
+    normal = (
+        part.get("mainMaterialEvidence", {})
+        .get("sectionProjectionEvidence", {})
+        .get("normalProjection", {})
+    )
+    u = abs(float(normal.get("u") or 0.0))
+    v = abs(float(normal.get("v") or 0.0))
+    return "X" if u >= v else "Y"
+
+
+def _is_outer_offset(part: dict[str, Any]) -> bool:
+    centroid = (
+        part.get("mainMaterialEvidence", {})
+        .get("sectionProjectionEvidence", {})
+        .get("projectedCentroid", {})
+    )
+    u = abs(float(centroid.get("u") or 0.0))
+    v = abs(float(centroid.get("v") or 0.0))
+    return u >= 150 or v >= 150
+
+
+def _is_box_forming_candidate(part: dict[str, Any]) -> bool:
+    if not _is_main_candidate(part):
+        return False
+    evidence = part.get("mainMaterialEvidence", {})
+    start = float(evidence.get("axisStationStart") or 0.0)
+    length = float(evidence.get("axisStationLength") or 0.0)
+    return start > 0 and (_is_outer_offset(part) or length >= 1000)
