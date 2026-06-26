@@ -22,3 +22,7 @@ dist/
 Thumbs.db
 .vscode/
 .idea/
+
+# Local notes not committed
+/docs/project-overview.md
+/聊天记录.md
