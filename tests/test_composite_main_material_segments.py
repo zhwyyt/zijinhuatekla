@@ -83,7 +83,20 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
 
         segments = classify_composite_main_material_segments(assembly)
 
-        self.assertEqual("CROSS_TO_BOX_TRANSITION", segments[1].segment_type.value)
+        self.assertEqual("CROSS_TO_BOX_TRANSITION", segments[0].segment_type.value)
+
+    def test_zero_station_can_be_transition_when_cross_and_box_forming_overlap(self):
+        assembly = _composite_fixture(box_parts_start=0)
+        assembly["metadata"]["boxSectionEvidence"]["stationLoops"] = [
+            _station_loop(0, "transition"),
+            _station_loop(4500, "box"),
+        ]
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        self.assertEqual("CROSS_TO_BOX_TRANSITION", segments[0].segment_type.value)
+        self.assertEqual((0, 4500), (segments[0].station_start, segments[0].station_end))
+        self.assertEqual([], segments[0].main_plates)
 
 
 def _composite_fixture(include_terminal_box_station=True, box_parts_start=3000):

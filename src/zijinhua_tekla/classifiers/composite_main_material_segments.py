@@ -117,7 +117,7 @@ def _classify_station_type(
     has_outer_flange = any(_is_outer_offset(part) for part in active_parts)
     station = float(station_loop.get("station") or 0.0)
     has_box_forming = sum(1 for part in active_parts if _is_box_forming_candidate(part)) >= 2
-    if has_cross_core and has_box_forming and station > 0:
+    if has_cross_core and has_box_forming:
         return CompositeSegmentType.CROSS_TO_BOX_TRANSITION
     if has_cross_core and has_outer_flange:
         return CompositeSegmentType.CROSS_CORE_WITH_FLANGES
