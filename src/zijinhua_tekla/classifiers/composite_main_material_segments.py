@@ -110,7 +110,7 @@ def _classify_station_type(
     station_loop: dict[str, Any],
     active_parts: list[dict[str, Any]],
 ) -> CompositeSegmentType:
-    if int(station_loop.get("closedLoopCount") or 0) > 0:
+    if _has_box_closed_section_evidence(station_loop):
         return CompositeSegmentType.BOX_CLOSED_SECTION
     normal_axes = {_normal_axis(part) for part in active_parts}
     has_cross_core = "X" in normal_axes and "Y" in normal_axes
@@ -122,7 +122,21 @@ def _classify_station_type(
         return CompositeSegmentType.CROSS_CORE_WITH_FLANGES
     if has_box_forming:
         return CompositeSegmentType.PARTIAL_BOX_FORMING
+    if int(station_loop.get("closedLoopCount") or 0) > 0:
+        return CompositeSegmentType.BOX_CLOSED_SECTION
     return CompositeSegmentType.MIXED_OR_INSUFFICIENT_EVIDENCE
+
+
+def _has_box_closed_section_evidence(station_loop: dict[str, Any]) -> bool:
+    if int(station_loop.get("innerLoopCount") or 0) > 0:
+        return True
+    status = str(station_loop.get("topologyStatus") or station_loop.get("topology_status") or "")
+    if status == "CLOSED_WITH_CAVITY":
+        return True
+    diagnostics = station_loop.get("diagnostics", [])
+    if isinstance(diagnostics, list) and "compositeTestRegime=box" in diagnostics:
+        return True
+    return False
 
 
 def _merge_snapshots_into_segments(

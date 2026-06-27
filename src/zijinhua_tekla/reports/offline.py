@@ -309,7 +309,10 @@ def _flatten_box_main_material_segment_groups(groups: list[dict[str, object]]) -
 def _flatten_composite_main_material_segments(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     flat = []
     for segment in rows:
-        for plate in segment.get("main_plates", []):
+        plates = segment.get("main_plates", [])
+        if not plates:
+            plates = [{}]
+        for plate in plates:
             flat.append(
                 {
                     "assembly_id": segment.get("assembly_id", ""),
@@ -318,11 +321,12 @@ def _flatten_composite_main_material_segments(rows: list[dict[str, object]]) -> 
                     "station_end": segment.get("station_end", ""),
                     "segment_type": segment.get("segment_type", ""),
                     "confidence": segment.get("confidence", ""),
+                    "segment_evidence_codes": ";".join(str(value) for value in segment.get("evidence_codes", [])),
                     "part_id": plate.get("part_id", ""),
                     "part_position": plate.get("part_position", ""),
                     "primary_role": plate.get("primary_role", ""),
-                    "secondary_evidence": ";".join(plate.get("secondary_evidence", [])),
-                    "evidence_codes": ";".join(plate.get("evidence_codes", [])),
+                    "secondary_evidence": ";".join(str(value) for value in plate.get("secondary_evidence", [])),
+                    "plate_evidence_codes": ";".join(str(value) for value in plate.get("evidence_codes", [])),
                 }
             )
     return flat

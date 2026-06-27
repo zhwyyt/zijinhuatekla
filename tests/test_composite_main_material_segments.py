@@ -96,6 +96,16 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
         self.assertEqual("CROSS_TO_BOX_TRANSITION", segments[0].segment_type.value)
         self.assertEqual((0, 4500), (segments[0].station_start, segments[0].station_end))
 
+    def test_closed_part_loops_do_not_force_cross_section_to_box(self):
+        assembly = _composite_fixture()
+        for station_loop in assembly["metadata"]["boxSectionEvidence"]["stationLoops"][:2]:
+            station_loop["closedLoopCount"] = 7
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        self.assertEqual("CROSS_CORE_WITH_FLANGES", segments[0].segment_type.value)
+        self.assertIn("P-FLANGE-L", _plate_positions(segments[0]))
+
     def test_assigns_cross_flange_and_box_main_wall_roles(self):
         segments = classify_composite_main_material_segments(_composite_fixture())
 
@@ -177,9 +187,11 @@ def _composite_fixture(include_terminal_box_station=True, box_parts_start=3000):
 
 def _station_loop(station, regime_hint):
     closed_count = 1 if regime_hint == "box" else 0
+    inner_loop_count = 1 if regime_hint == "box" else 0
     return {
         "station": station,
         "closedLoopCount": closed_count,
+        "innerLoopCount": inner_loop_count,
         "partLoops": [],
         "diagnostics": [f"compositeTestRegime={regime_hint}"],
     }
@@ -209,4 +221,5 @@ def _part(part_id, position, start, end, normal_axis, u, v, span_u, span_v):
 
 if __name__ == "__main__":
     unittest.main()
+
 

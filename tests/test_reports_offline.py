@@ -161,7 +161,7 @@ class OfflineReportTests(unittest.TestCase):
                     continuity_level=SegmentContinuityLevel.CONTINUOUS,
                     evidence_codes=["BODY_FACE_GROUP", "AXIS_STATION_ORDER", "SEGMENT_ADJACENCY_EVIDENCE"],
                     confidence=0.95,
-                )
+                ),
             ],
             composite_main_material_segments=[
                 CompositeMainMaterialSegment(
@@ -181,7 +181,17 @@ class OfflineReportTests(unittest.TestCase):
                             evidence_codes=["CROSS_FLANGE_OUTER_PLATE"],
                         )
                     ],
-                )
+                ),
+                CompositeMainMaterialSegment(
+                    assembly_id="100",
+                    segment_id="S2",
+                    station_start=3000,
+                    station_end=4500,
+                    segment_type=CompositeSegmentType.MIXED_OR_INSUFFICIENT_EVIDENCE,
+                    confidence=0.41,
+                    evidence_codes=["STATION_REGIME_SEGMENT", "INSUFFICIENT_MAIN_PLATE_EVIDENCE"],
+                    main_plates=[],
+                ),
             ],
             box_station_topology_diagnostics=[
                 BoxStationTopologyDiagnostic(
@@ -348,6 +358,15 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual("CROSS_CORE_WITH_FLANGES", composite_rows[0]["segment_type"])
         self.assertEqual("A-FLANGE-1", composite_rows[0]["main_plates"][0]["part_position"])
         self.assertEqual("CROSS_FLANGE_MAIN_PLATE", composite_csv_rows.iloc[0]["primary_role"])
+        self.assertEqual(2, len(composite_csv_rows))
+        self.assertEqual("S2", composite_csv_rows.iloc[1]["segment_id"])
+        self.assertEqual("MIXED_OR_INSUFFICIENT_EVIDENCE", composite_csv_rows.iloc[1]["segment_type"])
+        self.assertTrue(pd.isna(composite_csv_rows.iloc[1]["part_position"]))
+        self.assertEqual(
+            "STATION_REGIME_SEGMENT;INSUFFICIENT_MAIN_PLATE_EVIDENCE",
+            composite_csv_rows.iloc[1]["segment_evidence_codes"],
+        )
+        self.assertEqual("CROSS_FLANGE_OUTER_PLATE", composite_csv_rows.iloc[0]["plate_evidence_codes"])
         self.assertIn(paths.composite_main_material_segments_path, paths.as_tuple())
         self.assertIn(paths.composite_main_material_segments_csv_path, paths.as_tuple())
         self.assertEqual("MAIN_WALL", box_relation_rows[0]["relation_to_box_body"])
@@ -404,4 +423,5 @@ class OfflineReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
 

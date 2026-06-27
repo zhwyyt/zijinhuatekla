@@ -100,6 +100,10 @@
 2026-06-24：按用户澄清完成新导出契约全项目迁移审计，不再只核对 BOX 主板。已修复三类旧契约依赖：BOX 主壁板 seed 现在优先消费 `metadata.boxSectionEvidence.stationLoops[].partLoops[].sectionLoops/segments`，旧 `member.Samples/SectionParts` 仅作 fallback；拓扑 seed 增加长轴向壁板候选与 `normalProjectionMagnitude` 过滤，避免短端部/附件 loop 被误吸进主材集合；附属件簇主体边界由 offline pipeline 传入已确认主壁板 ids，旧 `Classification.PartRoles/mainPartId` 仅作 fallback。回归 smoke：T3-5GKZ-2 主壁板 16 个实体/13 个唯一编号，保留 `T3-P-4897/T3-P-4895/T3-P-4907/T3-P-4899`；T3-5GKZ-10 主壁板 16 个实体/13 个唯一编号，missing/extra 为空，`T3-P-4918` 纳入、`T3-P-4916` 排除。验证记录：`docs/verification/2026-06-24-new-export-contract-project-audit.md`。
 2026-06-24：按用户截图复核修正 BOX 内外关系纯几何判定：`T3-5GKZ-8` 中 16 个原 `BOUNDARY_OR_THROUGH` 实体实际位于主壁板内腔。根因是 start/mid/end 采样时选到只有局部单片壁板的 station topology，并把局部 `CLOSED_WITHOUT_CAVITY` 当成完整 BOX 截面判外侧。已改为存在完整 cavity station 参照时，跳过面积小于完整闭合截面 75% 的局部不完整 station，只用几何拓扑判断内腔/外侧，不依赖编号、名称或业务标签。新 smoke 中 T3-5GKZ-8 分布 `INSIDE_BODY=165`、`OUTSIDE_ATTACHMENT=58`、`MAIN_WALL=16`、`BOUNDARY_OR_THROUGH=0`；16 个目标实体全部为 `INSIDE_BODY`。T3-5GKZ-10 回归仍保留 `BOUNDARY_OR_THROUGH=2`。验证记录：`docs/verification/2026-06-24-box-internal-cavity-geometry-fix.md`。
 
+2026-06-26：针对当前选择集 `T2-3GKZ-12` 暴露的复杂构件口径，已确认其不应只按单一 BOX 主材集合表达；下部是十字柱并带外侧翼缘板，上部是 BOX，外侧翼缘板在下部稳定十字柱区段中属于主板/主材。已新增组合截面主材设计：沿构件主轴自动切 N 个截面体系区段，每段只给每块板一个主角色，另一体系关系进入辅助解释；设计见 `docs/design/2026-06-26-composite-main-material-segments.md`。
+
+2026-06-27：组合截面主材识别已完成 fresh Tekla 当前选择集验证；新导出 `I:\zijinhuatekla\cache\20260627_083740` 中 `T2-3GKZ-12` 切为 6 个轴向区段，输出 `CROSS_FLANGE_MAIN_PLATE=56`、`BOX_MAIN_WALL_PLATE=30`、`CROSS_CORE_MAIN_PLATE=23`；验证记录见 `docs/verification/2026-06-27-composite-main-material-segments.md`。
+
 ## 已确认业务口径
 
 - `T3-H-558s/x/f` 这类 Excel 加工板可以来自 `BH400*200*7*10` 型钢拆板；它们不是 Tekla 独立零件缺失。
@@ -224,4 +228,6 @@
 - BOX 内外关系层后单元测试：`python -m unittest discover -s tests`，70 tests OK。存在 `openpyxl` 的 `datetime.utcnow()` DeprecationWarning，不影响当前测试结果。
 - BOX 内外关系层 T3 smoke：`python -m zijinhua_tekla.cli analyze --root I:\xingcaisuanfa\cache\20260623_144836 --truth-root I:\xingcaisuanfa\cache\20260615_161938 --member-id T3-5GKZ-10 --out outputs\box-part-spatial-relations-smoke-20260623-v3`；新增 `box-part-spatial-relations.json/csv`，分布 `INSIDE_BODY=228`、`MAIN_WALL=16`、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`。
 - T3 空间诊断：附属件簇 `15`，`Bracket=2`，`Unknown=13`。
+
+
 
