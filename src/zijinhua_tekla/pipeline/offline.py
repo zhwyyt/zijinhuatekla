@@ -15,6 +15,10 @@ from ..adapters.offline import (
 from ..casebank import CaseBank
 from ..classifiers import classify_part
 from ..classifiers.box_main_material_segments import BoxMainMaterialSegmentGroup, classify_main_material_segment_groups
+from ..classifiers.composite_main_material_segments import (
+    CompositeMainMaterialSegment,
+    classify_composite_main_material_segments,
+)
 from ..classifiers.box_part_spatial_relations import BoxPartSpatialRelation, classify_box_part_spatial_relations
 from ..classifiers.box_station_topology_diagnostics import BoxStationTopologyDiagnostic, diagnose_box_station_topology
 from ..classifiers.h_beam_part_sides import HBeamPartSide, classify_h_beam_part_sides
@@ -35,6 +39,7 @@ class OfflinePipelineResult:
     quality_report: DataQualityReport
     spatial_classifications: list[Any] = field(default_factory=list)
     box_main_material_segment_groups: list[BoxMainMaterialSegmentGroup] = field(default_factory=list)
+    composite_main_material_segments: list[CompositeMainMaterialSegment] = field(default_factory=list)
     box_part_spatial_relations: list[BoxPartSpatialRelation] = field(default_factory=list)
     box_station_topology_diagnostics: list[BoxStationTopologyDiagnostic] = field(default_factory=list)
     h_beam_part_sides: list[HBeamPartSide] = field(default_factory=list)
@@ -70,6 +75,7 @@ def run_offline_analysis(
     main_material_groups = classify_main_material_segment_groups(
         assembly, member, _confirmed_segment_positions(member_id, case_bank)
     )
+    composite_main_material_segments = classify_composite_main_material_segments(assembly, member)
     spatial_classifications = classify_appendage_clusters_from_bundle(
         assembly, member, body_part_ids=_main_wall_part_ids(main_material_groups)
     )
@@ -82,6 +88,7 @@ def run_offline_analysis(
         quality_report=quality_report_from_aligned_rows(aligned),
         spatial_classifications=spatial_classifications,
         box_main_material_segment_groups=main_material_groups,
+        composite_main_material_segments=composite_main_material_segments,
         box_part_spatial_relations=classify_box_part_spatial_relations(
             assembly, member, main_material_groups, outside_part_ids=outside_part_ids
         ),

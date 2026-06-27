@@ -60,6 +60,7 @@ class OfflinePipelineTests(unittest.TestCase):
                                         "stationLoops": [
                                             {
                                                 "station": 100,
+                                                "closedLoopCount": 1,
                                                 "supportPartIds": ["1", "10"],
                                                 "partLoops": [
                                                     {
@@ -94,6 +95,11 @@ class OfflinePipelineTests(unittest.TestCase):
                                             "axisStationLength": 1000,
                                             "bodyFaceId": "FACE_A",
                                             "isBodyWallPlateCandidate": True,
+                                            "sectionProjectionEvidence": {
+                                                "projectedCentroid": {"u": 0, "v": 242},
+                                                "projectedBoundsMin": {"u": -240, "v": 234},
+                                                "projectedBoundsMax": {"u": 240, "v": 250},
+                                            },
                                         },
                                         "length": 200,
                                         "thickness": 10,
@@ -194,6 +200,11 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual("OUTSIDE_ATTACHMENT", relation_by_position["A-BR-RIB"].relation_to_box_body)
         self.assertEqual(1, len(result.box_station_topology_diagnostics))
         self.assertEqual("CLOSED_WITHOUT_CAVITY", result.box_station_topology_diagnostics[0].topology_status)
+        self.assertTrue(result.composite_main_material_segments)
+        self.assertEqual(
+            "BOX_MAIN_WALL_PLATE",
+            result.composite_main_material_segments[0].main_plates[0].primary_role.value,
+        )
 
     def test_run_offline_analysis_outputs_h_beam_part_sides_for_gl_member(self):
         with tempfile.TemporaryDirectory() as temp_dir:
