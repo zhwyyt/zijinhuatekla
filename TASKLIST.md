@@ -19,7 +19,7 @@
 - [x] 建立 BOX 内外关系层 `BOX_PART_SPATIAL_RELATION`，先区分 `MAIN_WALL/INSIDE_BODY/OUTSIDE_ATTACHMENT/BOUNDARY_OR_THROUGH/INSUFFICIENT_EVIDENCE`，不在本阶段细分零件角色。已升级为 Tekla solid 原生 station loop + 每零件 start/mid/end 三点判定。
 - [x] 修正 BOX 内腔纯几何判定：跳过局部不完整 station topology，避免内腔竖向板/横板被误判为 `BOUNDARY_OR_THROUGH`；T3-5GKZ-8 的 16 个目标实体已全部回到 `INSIDE_BODY`，T3-5GKZ-10 仍保留真实边界候选。
 - [ ] 继续提升统一主材分段算法：H/GL 减少对 name 的依赖；BOX 已形成闭合截面外轮廓 trace 种子、主轴 station 连续扩展和截面复核的最终确认集合，并修复 `T3-5GKZ-2` 中 seed 后续 `flange_candidate/web_candidate` 主板段未扩展的问题；下一步继续稳定四壁板 face chains、降低对 Case Bank 反馈的依赖；T 型/十字/圆管新增策略，并将报告文件名迁移为通用 `main-material-segment-groups`。
-- [x] 建立组合截面构件主材识别：沿构件主轴自动切 N 个截面体系区段，分别识别十字柱核心板、外侧翼缘主板、BOX 主壁板和过渡主板；已用 fresh Tekla 当前选择集验证 `T2-3GKZ-12` 输出 6 个区段和 `CROSS_FLANGE_MAIN_PLATE=56`，记录见 `docs/verification/2026-06-27-composite-main-material-segments.md`。
+- [x] 建立组合截面构件主材识别：沿构件主轴自动切 N 个截面体系区段，分别识别十字柱核心板、外侧翼缘主板、BOX 主壁板、过渡主板以及 H/BH/GL 翼缘/腹板主板；已用 fresh Tekla 当前选择集验证 `T2-3GKZ-12` 输出 6 个区段和 `CROSS_FLANGE_MAIN_PLATE=56`，并已将 H/GL 主材组适配为 `H_OR_BH_SECTION` composite 输出，记录见 `docs/verification/2026-06-27-composite-main-material-segments.md`。
 - [x] 固化普通零件编号精准一致硬约束，禁止几何相似自动匹配。
 - [ ] 建立缺失/冲突零件复核工具：全模型搜索、候选排序、几何候选复核报告。
 - [x] 建立 `PartFeatureSnapshot` 契约，承接 `I:\autoweb\teklatest` 的零件特征提取结果。
@@ -80,5 +80,6 @@
 - [ ] 判断 `pyproject.toml` 新增依赖和 `docs/design/2026-06-23-main-material-segment-export-contract.md` 修改是否属于 BOX topology 提交范围。
 - [ ] 对未跟踪文件分组：BOX 验证记录保留并提交；`聊天记录.md`、`docs/project-overview.md` 需人工确认是否入库。
 - [ ] 每个收敛提交前运行最小相关测试；最终再跑 `python -m unittest discover -s tests` 或当前可行的完整测试集合。
+
 
 

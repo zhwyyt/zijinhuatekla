@@ -70,3 +70,24 @@ Representative `CROSS_FLANGE_MAIN_PLATE` positions include：`T2-3P-147`、`T2-3
 - 修复了一个真实烟测问题：`closedLoopCount > 0` 只能说明截面里存在闭合环，可能只是单块板自己的闭合矩形，不能直接等同于整体 BOX 闭合截面。组合截面分类器现在优先使用明确闭合箱体证据，例如 `innerLoopCount/topologyStatus=CLOSED_WITH_CAVITY` 或测试夹具中的 box regime 证据；否则先按活跃主板的 cross core、outer flange、box forming 投影证据判断。
 - 修复了报告 CSV 可审计性：当某个 composite segment 存在但 `main_plates=[]` 时，CSV 仍输出一行 segment-level 记录，并分开输出 `segment_evidence_codes` 与 `plate_evidence_codes`。
 - 本轮没有写死 `T2-3GKZ-12`、零件号或项目名；真实构件只作为 smoke/verification 样例。
+## H/BH/GL Composite Adapter
+
+2026-06-27 追加验证：H/BH/GL 主材分段结果已适配进入 composite 输出。当前不改变既有 H/GL 主材识别核心，而是在 offline pipeline 中把已计算的 `main_material_groups` 传给 composite classifier，输出统一的 `H_OR_BH_SECTION` segment 和 H/BH/GL 主角色。
+
+新增/验证角色：
+
+- `H_TOP_FLANGE_MAIN_PLATE`
+- `H_WEB_MAIN_PLATE`
+- `H_BOTTOM_FLANGE_MAIN_PLATE`
+- `H_FLANGE_MAIN_PLATE`
+
+验证命令：
+
+```powershell
+python -m unittest tests.test_pipeline_offline
+python -m unittest tests.test_composite_main_material_segments tests.test_main_material_segments
+python -m unittest tests.test_composite_main_material_segments tests.test_main_material_segments tests.test_box_main_material_segments tests.test_pipeline_offline tests.test_reports_offline tests.test_h_beam_part_sides
+```
+
+结果：PASS，最终相关回归 `Ran 37 tests ... OK`；有既有 openpyxl `datetime.utcnow()` deprecation warning，不影响断言。
+

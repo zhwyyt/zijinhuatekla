@@ -24,6 +24,7 @@
 - `CROSS_TO_BOX_TRANSITION`: 十字柱向 BOX 收口或转换的过渡区段。
 - `PARTIAL_BOX_FORMING`: BOX 外轮廓开始形成但尚未稳定闭合的区段。
 - `BOX_CLOSED_SECTION`: 稳定闭合 BOX 区段。
+- `H_OR_BH_SECTION`: H/BH/GL 主材段，当前由既有 H/GL 主材分段结果适配进入 composite 输出。
 - `END_OR_NODE_ZONE`: 端部、节点、局部附件触发的非稳定主体区段。
 - `MIXED_OR_INSUFFICIENT_EVIDENCE`: 证据不足或多体系混合但无法稳定归类的区段。
 
@@ -46,6 +47,10 @@
 - `BOX_MAIN_WALL_PLATE`: 稳定闭合 BOX 外壁主板。
 - `BOX_FORMING_MAIN_PLATE`: 过渡或局部形成 BOX 外轮廓的主体板。
 - `TRANSITION_MAIN_PLATE`: 过渡区内连续参与主体转换的主板。
+- `H_TOP_FLANGE_MAIN_PLATE`: H/BH/GL 上翼缘主板。
+- `H_BOTTOM_FLANGE_MAIN_PLATE`: H/BH/GL 下翼缘主板。
+- `H_WEB_MAIN_PLATE`: H/BH/GL 腹板主板。
+- `H_FLANGE_MAIN_PLATE`: H/BH/GL station slice 仅能确定翼缘但无法稳定区分上下时的翼缘主板。
 - `END_NODE_MAIN_PLATE_CANDIDATE`: 端部或节点区域的主体候选，默认需要复核。
 
 主角色优先级：
@@ -127,6 +132,7 @@ JSON 顶层建议结构：
 - 输出可包含 N 个轴向区段，不预设固定段数。
 - 下部十字柱外侧翼缘板在稳定十字柱区段中被识别为主材，角色为 `CROSS_FLANGE_MAIN_PLATE`。
 - 稳定 BOX 区段继续识别闭合 BOX 外壁主板，角色为 `BOX_MAIN_WALL_PLATE`。
+- H/BH/GL 主材可进入同一 composite 输出，角色为 `H_TOP_FLANGE_MAIN_PLATE`、`H_WEB_MAIN_PLATE`、`H_BOTTOM_FLANGE_MAIN_PLATE` 或 `H_FLANGE_MAIN_PLATE`。
 - 过渡区段内每块板只给一个 `primary_role`，另一体系关系进入 `secondary_evidence`。
 - 证据不足时输出 `MIXED_OR_INSUFFICIENT_EVIDENCE` 或候选复核，不写构件号、零件号、项目名特例。
 - 旧普通零件精准编号匹配和制造/建模口径差异规则不变。
@@ -145,3 +151,4 @@ JSON 顶层建议结构：
 - 本设计不在导出器中直接声明主材角色；导出器只提供可复核的截面、station、loop、slice 证据。
 - 本设计不解决完整加工工序、装焊顺序或配送顺序。
 - 本设计不把几何相似候选升级为自动编号匹配。
+

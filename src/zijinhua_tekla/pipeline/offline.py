@@ -75,7 +75,9 @@ def run_offline_analysis(
     main_material_groups = classify_main_material_segment_groups(
         assembly, member, _confirmed_segment_positions(member_id, case_bank)
     )
-    composite_main_material_segments = classify_composite_main_material_segments(assembly, member)
+    composite_main_material_segments = classify_composite_main_material_segments(
+        assembly, member, main_material_groups=main_material_groups
+    )
     spatial_classifications = classify_appendage_clusters_from_bundle(
         assembly, member, body_part_ids=_main_wall_part_ids(main_material_groups)
     )
@@ -159,4 +161,5 @@ def _confirmed_segment_positions(member_id: str, case_bank: CaseBank) -> set[str
     if feedback is None or feedback.expected_label != "BOX_COLUMN_MAIN_MATERIAL_SEGMENT_GROUP":
         return set()
     return set(re.findall(r"T3-P-\d+", feedback.human_note))
+
 

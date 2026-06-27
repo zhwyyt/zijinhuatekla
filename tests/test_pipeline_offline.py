@@ -284,6 +284,15 @@ class OfflinePipelineTests(unittest.TestCase):
         by_position = {row.part_position: row for row in result.h_beam_part_sides}
         self.assertEqual("TOP_FLANGE_OUTER", by_position["A-P-lift"].h_side)
         self.assertEqual("WEB_LEFT", by_position["A-P-left"].h_side)
+        self.assertEqual("H_OR_BH_SECTION", result.composite_main_material_segments[0].segment_type.value)
+        composite_roles = {
+            plate.part_position: plate.primary_role.value
+            for segment in result.composite_main_material_segments
+            for plate in segment.main_plates
+        }
+        self.assertEqual("H_TOP_FLANGE_MAIN_PLATE", composite_roles["A-P-top"])
+        self.assertEqual("H_WEB_MAIN_PLATE", composite_roles["A-P-web"])
+        self.assertEqual("H_BOTTOM_FLANGE_MAIN_PLATE", composite_roles["A-P-bottom"])
 
 
 if __name__ == "__main__":
@@ -323,3 +332,4 @@ def _projected_part(part_id, position, name, min_u, max_u, min_v, max_v):
             },
         },
     }
+

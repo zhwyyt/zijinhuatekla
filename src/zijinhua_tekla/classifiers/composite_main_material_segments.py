@@ -12,6 +12,7 @@ class CompositeSegmentType(str, Enum):
     BOX_CLOSED_SECTION = "BOX_CLOSED_SECTION"
     END_OR_NODE_ZONE = "END_OR_NODE_ZONE"
     MIXED_OR_INSUFFICIENT_EVIDENCE = "MIXED_OR_INSUFFICIENT_EVIDENCE"
+    H_OR_BH_SECTION = "H_OR_BH_SECTION"
 
 
 class CompositePrimaryRole(str, Enum):
@@ -21,6 +22,10 @@ class CompositePrimaryRole(str, Enum):
     BOX_FORMING_MAIN_PLATE = "BOX_FORMING_MAIN_PLATE"
     TRANSITION_MAIN_PLATE = "TRANSITION_MAIN_PLATE"
     END_NODE_MAIN_PLATE_CANDIDATE = "END_NODE_MAIN_PLATE_CANDIDATE"
+    H_TOP_FLANGE_MAIN_PLATE = "H_TOP_FLANGE_MAIN_PLATE"
+    H_BOTTOM_FLANGE_MAIN_PLATE = "H_BOTTOM_FLANGE_MAIN_PLATE"
+    H_WEB_MAIN_PLATE = "H_WEB_MAIN_PLATE"
+    H_FLANGE_MAIN_PLATE = "H_FLANGE_MAIN_PLATE"
 
 
 @dataclass(frozen=True)
@@ -76,13 +81,102 @@ class _StationSnapshot:
 def classify_composite_main_material_segments(
     assembly: dict[str, Any],
     member: dict[str, Any] | None = None,
+    main_material_groups: list[Any] | None = None,
 ) -> list[CompositeMainMaterialSegment]:
+    adapted = _adapt_h_or_gl_main_material_groups(assembly, main_material_groups or [])
+    if adapted:
+        return adapted
     snapshots = _station_snapshots(assembly)
     if not snapshots:
         return []
     return _merge_snapshots_into_segments(str(assembly.get("assemblyId", "")), snapshots, assembly)
 
 
+
+def _adapt_h_or_gl_main_material_groups(
+    assembly: dict[str, Any],
+    groups: list[Any],
+) -> list[CompositeMainMaterialSegment]:
+    plates: list[CompositeMainPlate] = []
+    evidence_codes = ["adapted_from_main_material_segment_groups"]
+    starts: list[float] = []
+    ends: list[float] = []
+    for group in groups:
+        role = str(getattr(group, "evidence_summary", {}).get("main_material_role", ""))
+        primary_role = _h_or_gl_primary_role(role)
+        if primary_role is None:
+            continue
+        evidence_codes.extend(str(code) for code in getattr(group, "evidence_codes", []))
+        part_ids = [str(value) for value in getattr(group, "part_ids", [])]
+        part_positions = [str(value) for value in getattr(group, "part_positions", [])]
+        for index, part_id in enumerate(part_ids):
+            part_position = part_positions[index] if index < len(part_positions) else ""
+            plates.append(
+                CompositeMainPlate(
+                    part_id=part_id,
+                    part_position=part_position,
+                    primary_role=primary_role,
+                    secondary_evidence=["h_or_gl_main_material_group"],
+                    evidence_codes=["H_OR_GL_MAIN_MATERIAL_GROUP", primary_role.value],
+                )
+            )
+        starts.extend(_group_station_starts(getattr(group, "station_ranges", "")))
+        ends.extend(_group_station_ends(getattr(group, "station_ranges", "")))
+    if not plates:
+        return []
+    return [
+        CompositeMainMaterialSegment(
+            assembly_id=str(assembly.get("assemblyId", "")),
+            segment_id="S1",
+            station_start=min(starts) if starts else 0.0,
+            station_end=max(ends) if ends else _member_axis_length(assembly),
+            segment_type=CompositeSegmentType.H_OR_BH_SECTION,
+            main_plates=sorted(plates, key=lambda plate: (plate.primary_role.value, plate.part_position, plate.part_id)),
+            confidence=0.86,
+            evidence_codes=_dedupe(evidence_codes),
+        )
+    ]
+
+
+def _h_or_gl_primary_role(role: str) -> CompositePrimaryRole | None:
+    if role == "TOP_FLANGE":
+        return CompositePrimaryRole.H_TOP_FLANGE_MAIN_PLATE
+    if role == "BOTTOM_FLANGE":
+        return CompositePrimaryRole.H_BOTTOM_FLANGE_MAIN_PLATE
+    if role == "WEB":
+        return CompositePrimaryRole.H_WEB_MAIN_PLATE
+    if role == "FLANGE":
+        return CompositePrimaryRole.H_FLANGE_MAIN_PLATE
+    return None
+
+
+def _group_station_starts(station_ranges: str) -> list[float]:
+    return [start for start, _end in _parse_group_station_ranges(station_ranges)]
+
+
+def _group_station_ends(station_ranges: str) -> list[float]:
+    return [end for _start, end in _parse_group_station_ranges(station_ranges)]
+
+
+def _parse_group_station_ranges(station_ranges: str) -> list[tuple[float, float]]:
+    ranges = []
+    for item in str(station_ranges).split(";"):
+        if ":" not in item or "-" not in item:
+            continue
+        value = item.rsplit(":", 1)[-1]
+        start_text, end_text = value.split("-", 1)
+        try:
+            ranges.append((float(start_text), float(end_text)))
+        except ValueError:
+            continue
+    return ranges
+
+def _dedupe(values: list[str]) -> list[str]:
+    result = []
+    for value in values:
+        if value and value not in result:
+            result.append(value)
+    return result
 def _station_snapshots(assembly: dict[str, Any]) -> list[_StationSnapshot]:
     parts = [part for part in assembly.get("parts", []) if _is_main_candidate(part)]
     station_loops = (
@@ -315,4 +409,6 @@ def _has_box_section_projection_evidence(part: dict[str, Any]) -> bool:
     span_u = abs(float(bounds_max.get("u") or 0.0) - float(bounds_min.get("u") or 0.0))
     span_v = abs(float(bounds_max.get("v") or 0.0) - float(bounds_min.get("v") or 0.0))
     return max(span_u, span_v) >= 400
+
+
 

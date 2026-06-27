@@ -104,6 +104,8 @@
 
 2026-06-27：组合截面主材识别已完成 fresh Tekla 当前选择集验证；新导出 `I:\zijinhuatekla\cache\20260627_083740` 中 `T2-3GKZ-12` 切为 6 个轴向区段，输出 `CROSS_FLANGE_MAIN_PLATE=56`、`BOX_MAIN_WALL_PLATE=30`、`CROSS_CORE_MAIN_PLATE=23`；验证记录见 `docs/verification/2026-06-27-composite-main-material-segments.md`。
 
+2026-06-27：H/BH/GL 主材分段已适配进入 composite 统一角色输出；offline pipeline 复用既有 `main_material_groups`，输出 `H_OR_BH_SECTION` 以及 `H_TOP_FLANGE_MAIN_PLATE/H_WEB_MAIN_PLATE/H_BOTTOM_FLANGE_MAIN_PLATE/H_FLANGE_MAIN_PLATE`，不改变现有 H/GL 识别核心。
+
 ## 已确认业务口径
 
 - `T3-H-558s/x/f` 这类 Excel 加工板可以来自 `BH400*200*7*10` 型钢拆板；它们不是 Tekla 独立零件缺失。
@@ -228,6 +230,7 @@
 - BOX 内外关系层后单元测试：`python -m unittest discover -s tests`，70 tests OK。存在 `openpyxl` 的 `datetime.utcnow()` DeprecationWarning，不影响当前测试结果。
 - BOX 内外关系层 T3 smoke：`python -m zijinhua_tekla.cli analyze --root I:\xingcaisuanfa\cache\20260623_144836 --truth-root I:\xingcaisuanfa\cache\20260615_161938 --member-id T3-5GKZ-10 --out outputs\box-part-spatial-relations-smoke-20260623-v3`；新增 `box-part-spatial-relations.json/csv`，分布 `INSIDE_BODY=228`、`MAIN_WALL=16`、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`。
 - T3 空间诊断：附属件簇 `15`，`Bracket=2`，`Unknown=13`。
+
 
 
 
