@@ -103,20 +103,25 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
         transition = segments[1]
         upper = segments[2]
 
+        self.assertEqual({"P-CORE-X", "P-CORE-Y", "P-FLANGE-L", "P-FLANGE-R"}, _plate_positions(lower))
         lower_roles = {plate.part_position: plate.primary_role.value for plate in lower.main_plates}
         self.assertEqual("CROSS_FLANGE_MAIN_PLATE", lower_roles["P-FLANGE-L"])
         self.assertEqual("CROSS_FLANGE_MAIN_PLATE", lower_roles["P-FLANGE-R"])
         self.assertEqual("CROSS_CORE_MAIN_PLATE", lower_roles["P-CORE-X"])
         self.assertEqual("CROSS_CORE_MAIN_PLATE", lower_roles["P-CORE-Y"])
 
+        self.assertEqual({"P-BOX-A", "P-BOX-B", "P-CORE-X", "P-CORE-Y"}, _plate_positions(transition))
         transition_roles = {plate.part_position: plate.primary_role.value for plate in transition.main_plates}
         self.assertEqual("TRANSITION_MAIN_PLATE", transition_roles["P-CORE-X"])
+        self.assertEqual("TRANSITION_MAIN_PLATE", transition_roles["P-CORE-Y"])
         self.assertEqual("BOX_FORMING_MAIN_PLATE", transition_roles["P-BOX-A"])
+        self.assertEqual("BOX_FORMING_MAIN_PLATE", transition_roles["P-BOX-B"])
         self.assertIn(
             "continues_from_lower_cross_column",
             next(plate for plate in transition.main_plates if plate.part_position == "P-CORE-X").secondary_evidence,
         )
 
+        self.assertEqual({"P-BOX-A", "P-BOX-B", "P-BOX-C", "P-BOX-D"}, _plate_positions(upper))
         upper_roles = {plate.part_position: plate.primary_role.value for plate in upper.main_plates}
         self.assertEqual(
             {
@@ -127,6 +132,16 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
             },
             upper_roles,
         )
+    def test_skips_center_candidate_without_cross_core_span_evidence(self):
+        assembly = _composite_fixture()
+        assembly["parts"].append(_part("center-short", "P-CENTER-SHORT", 0, 3000, "X", 0, 0, 20, 80))
+
+        lower = classify_composite_main_material_segments(assembly)[0]
+
+        self.assertNotIn("P-CENTER-SHORT", _plate_positions(lower))
+def _plate_positions(segment):
+    return {plate.part_position for plate in segment.main_plates}
+
 
 def _composite_fixture(include_terminal_box_station=True, box_parts_start=3000):
     station_loops = [
@@ -194,5 +209,4 @@ def _part(part_id, position, start, end, normal_axis, u, v, span_u, span_v):
 
 if __name__ == "__main__":
     unittest.main()
-
 

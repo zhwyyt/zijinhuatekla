@@ -233,7 +233,9 @@ def _primary_role_for_part(
     if segment_type == CompositeSegmentType.CROSS_CORE_WITH_FLANGES:
         if _is_outer_offset(part):
             return CompositePrimaryRole.CROSS_FLANGE_MAIN_PLATE, ["parallel_to_cross_core_plate"]
-        return CompositePrimaryRole.CROSS_CORE_MAIN_PLATE, []
+        if _is_cross_core_candidate(part):
+            return CompositePrimaryRole.CROSS_CORE_MAIN_PLATE, []
+        return None, []
     if segment_type == CompositeSegmentType.CROSS_TO_BOX_TRANSITION:
         if _is_box_forming_candidate(part):
             return CompositePrimaryRole.BOX_FORMING_MAIN_PLATE, ["overlaps_with_cross_column_transition"]
@@ -269,6 +271,21 @@ def _is_outer_offset(part: dict[str, Any]) -> bool:
     return u >= 150 or v >= 150
 
 
+def _is_cross_core_candidate(part: dict[str, Any]) -> bool:
+    if _is_outer_offset(part):
+        return False
+    return _section_projection_major_span(part) >= 250
+
+
+def _section_projection_major_span(part: dict[str, Any]) -> float:
+    projection = part.get("mainMaterialEvidence", {}).get("sectionProjectionEvidence", {})
+    bounds_min = projection.get("projectedBoundsMin", {})
+    bounds_max = projection.get("projectedBoundsMax", {})
+    span_u = abs(float(bounds_max.get("u") or 0.0) - float(bounds_min.get("u") or 0.0))
+    span_v = abs(float(bounds_max.get("v") or 0.0) - float(bounds_min.get("v") or 0.0))
+    return max(span_u, span_v)
+
+
 def _is_box_forming_candidate(part: dict[str, Any]) -> bool:
     if not _is_main_candidate(part) or not _is_outer_offset(part):
         return False
@@ -284,5 +301,4 @@ def _has_box_section_projection_evidence(part: dict[str, Any]) -> bool:
     span_u = abs(float(bounds_max.get("u") or 0.0) - float(bounds_min.get("u") or 0.0))
     span_v = abs(float(bounds_max.get("v") or 0.0) - float(bounds_min.get("v") or 0.0))
     return max(span_u, span_v) >= 400
-
 
