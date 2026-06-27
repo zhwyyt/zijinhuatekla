@@ -68,7 +68,6 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
         self.assertEqual([(0, 3000), (3000, 4500), (4500, 8000)], [
             (segment.station_start, segment.station_end) for segment in segments
         ])
-        self.assertEqual([[], [], []], [segment.main_plates for segment in segments])
 
     def test_uses_member_axis_length_for_last_segment_end_when_terminal_station_missing(self):
         assembly = _composite_fixture(include_terminal_box_station=False)
@@ -96,8 +95,38 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
 
         self.assertEqual("CROSS_TO_BOX_TRANSITION", segments[0].segment_type.value)
         self.assertEqual((0, 4500), (segments[0].station_start, segments[0].station_end))
-        self.assertEqual([], segments[0].main_plates)
 
+    def test_assigns_cross_flange_and_box_main_wall_roles(self):
+        segments = classify_composite_main_material_segments(_composite_fixture())
+
+        lower = segments[0]
+        transition = segments[1]
+        upper = segments[2]
+
+        lower_roles = {plate.part_position: plate.primary_role.value for plate in lower.main_plates}
+        self.assertEqual("CROSS_FLANGE_MAIN_PLATE", lower_roles["P-FLANGE-L"])
+        self.assertEqual("CROSS_FLANGE_MAIN_PLATE", lower_roles["P-FLANGE-R"])
+        self.assertEqual("CROSS_CORE_MAIN_PLATE", lower_roles["P-CORE-X"])
+        self.assertEqual("CROSS_CORE_MAIN_PLATE", lower_roles["P-CORE-Y"])
+
+        transition_roles = {plate.part_position: plate.primary_role.value for plate in transition.main_plates}
+        self.assertEqual("TRANSITION_MAIN_PLATE", transition_roles["P-CORE-X"])
+        self.assertEqual("BOX_FORMING_MAIN_PLATE", transition_roles["P-BOX-A"])
+        self.assertIn(
+            "continues_from_lower_cross_column",
+            next(plate for plate in transition.main_plates if plate.part_position == "P-CORE-X").secondary_evidence,
+        )
+
+        upper_roles = {plate.part_position: plate.primary_role.value for plate in upper.main_plates}
+        self.assertEqual(
+            {
+                "P-BOX-A": "BOX_MAIN_WALL_PLATE",
+                "P-BOX-B": "BOX_MAIN_WALL_PLATE",
+                "P-BOX-C": "BOX_MAIN_WALL_PLATE",
+                "P-BOX-D": "BOX_MAIN_WALL_PLATE",
+            },
+            upper_roles,
+        )
 
 def _composite_fixture(include_terminal_box_station=True, box_parts_start=3000):
     station_loops = [
@@ -165,3 +194,5 @@ def _part(part_id, position, start, end, normal_axis, u, v, span_u, span_v):
 
 if __name__ == "__main__":
     unittest.main()
+
+

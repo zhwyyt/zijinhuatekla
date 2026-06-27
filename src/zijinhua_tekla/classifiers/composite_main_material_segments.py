@@ -115,7 +115,6 @@ def _classify_station_type(
     normal_axes = {_normal_axis(part) for part in active_parts}
     has_cross_core = "X" in normal_axes and "Y" in normal_axes
     has_outer_flange = any(_is_outer_offset(part) for part in active_parts)
-    station = float(station_loop.get("station") or 0.0)
     has_box_forming = sum(1 for part in active_parts if _is_box_forming_candidate(part)) >= 2
     if has_cross_core and has_box_forming:
         return CompositeSegmentType.CROSS_TO_BOX_TRANSITION
@@ -144,6 +143,7 @@ def _merge_snapshots_into_segments(
             station_end = snapshots[index].station
         else:
             station_end = max(_member_axis_length(assembly), _max_candidate_station_end(assembly), last.station)
+        main_plates = _assign_main_plates(assembly, station_start, station_end, first.segment_type)
         result.append(
             CompositeMainMaterialSegment(
                 assembly_id=assembly_id,
@@ -151,7 +151,7 @@ def _merge_snapshots_into_segments(
                 station_start=station_start,
                 station_end=station_end,
                 segment_type=first.segment_type,
-                main_plates=[],
+                main_plates=main_plates,
                 confidence=0.75,
                 evidence_codes=["STATION_REGIME_SEGMENT"],
             )
@@ -173,7 +173,7 @@ def _max_candidate_station_end(assembly: dict[str, Any]) -> float:
     station_ends = []
     for part in assembly.get("parts", []):
         if _is_main_candidate(part):
-            station_ends.append(float(part.get("mainMaterialEvidence", {}).get("axisStationEnd") or 0.0))
+            station_ends.append(_station_end(part))
     return max(station_ends, default=0.0)
 
 
@@ -182,10 +182,69 @@ def _is_main_candidate(part: dict[str, Any]) -> bool:
 
 
 def _part_active_at(part: dict[str, Any], station: float) -> bool:
+    return _station_start(part) <= station <= _station_end(part)
+
+
+def _station_start(part: dict[str, Any]) -> float:
     evidence = part.get("mainMaterialEvidence", {})
-    start = float(evidence.get("axisStationStart") or 0.0)
-    end = float(evidence.get("axisStationEnd") or 0.0)
-    return start <= station <= end
+    return float(evidence.get("axisStationStart") or 0.0)
+
+
+def _station_end(part: dict[str, Any]) -> float:
+    evidence = part.get("mainMaterialEvidence", {})
+    return float(evidence.get("axisStationEnd") or 0.0)
+
+
+def _interval_overlaps(part: dict[str, Any], start: float, end: float) -> bool:
+    return _station_start(part) < end and _station_end(part) > start
+
+
+def _assign_main_plates(
+    assembly: dict[str, Any],
+    station_start: float,
+    station_end: float,
+    segment_type: CompositeSegmentType,
+) -> list[CompositeMainPlate]:
+    parts = [
+        part for part in assembly.get("parts", [])
+        if _is_main_candidate(part) and _interval_overlaps(part, station_start, station_end)
+    ]
+    plates = []
+    for part in parts:
+        primary_role, secondary = _primary_role_for_part(part, segment_type)
+        if primary_role is None:
+            continue
+        plates.append(
+            CompositeMainPlate(
+                part_id=str(part.get("partId", "")),
+                part_position=str(part.get("partPosition", "")),
+                primary_role=primary_role,
+                secondary_evidence=secondary,
+                evidence_codes=[segment_type.value, primary_role.value],
+            )
+        )
+    return sorted(plates, key=lambda plate: (plate.primary_role.value, plate.part_position, plate.part_id))
+
+
+def _primary_role_for_part(
+    part: dict[str, Any],
+    segment_type: CompositeSegmentType,
+) -> tuple[CompositePrimaryRole | None, list[str]]:
+    if segment_type == CompositeSegmentType.CROSS_CORE_WITH_FLANGES:
+        if _is_outer_offset(part):
+            return CompositePrimaryRole.CROSS_FLANGE_MAIN_PLATE, ["parallel_to_cross_core_plate"]
+        return CompositePrimaryRole.CROSS_CORE_MAIN_PLATE, []
+    if segment_type == CompositeSegmentType.CROSS_TO_BOX_TRANSITION:
+        if _is_box_forming_candidate(part):
+            return CompositePrimaryRole.BOX_FORMING_MAIN_PLATE, ["overlaps_with_cross_column_transition"]
+        return CompositePrimaryRole.TRANSITION_MAIN_PLATE, ["continues_from_lower_cross_column"]
+    if segment_type == CompositeSegmentType.PARTIAL_BOX_FORMING:
+        return CompositePrimaryRole.BOX_FORMING_MAIN_PLATE, []
+    if segment_type == CompositeSegmentType.BOX_CLOSED_SECTION:
+        return CompositePrimaryRole.BOX_MAIN_WALL_PLATE, []
+    if segment_type == CompositeSegmentType.END_OR_NODE_ZONE:
+        return CompositePrimaryRole.END_NODE_MAIN_PLATE_CANDIDATE, []
+    return None, []
 
 
 def _normal_axis(part: dict[str, Any]) -> str:
@@ -225,3 +284,5 @@ def _has_box_section_projection_evidence(part: dict[str, Any]) -> bool:
     span_u = abs(float(bounds_max.get("u") or 0.0) - float(bounds_min.get("u") or 0.0))
     span_v = abs(float(bounds_max.get("v") or 0.0) - float(bounds_min.get("v") or 0.0))
     return max(span_u, span_v) >= 400
+
+
