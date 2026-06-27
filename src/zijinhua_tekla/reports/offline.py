@@ -38,6 +38,8 @@ class OfflineReportPaths:
     manufacturing_scope_csv_path: Path
     box_main_material_segments_path: Path
     box_main_material_segments_csv_path: Path
+    composite_main_material_segments_path: Path
+    composite_main_material_segments_csv_path: Path
     box_part_spatial_relations_path: Path
     box_part_spatial_relations_csv_path: Path
     box_station_topology_diagnostics_path: Path
@@ -66,6 +68,8 @@ class OfflineReportPaths:
             self.manufacturing_scope_csv_path,
             self.box_main_material_segments_path,
             self.box_main_material_segments_csv_path,
+            self.composite_main_material_segments_path,
+            self.composite_main_material_segments_csv_path,
             self.box_part_spatial_relations_path,
             self.box_part_spatial_relations_csv_path,
             self.box_station_topology_diagnostics_path,
@@ -96,6 +100,8 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
     manufacturing_scope_csv_path = out_dir / f"{member_id}-manufacturing-scope-candidates.csv"
     box_main_material_segments_path = out_dir / f"{member_id}-box-main-material-segment-groups.json"
     box_main_material_segments_csv_path = out_dir / f"{member_id}-box-main-material-segment-groups.csv"
+    composite_main_material_segments_path = out_dir / f"{member_id}-composite-main-material-segments.json"
+    composite_main_material_segments_csv_path = out_dir / f"{member_id}-composite-main-material-segments.csv"
     box_part_spatial_relations_path = out_dir / f"{member_id}-box-part-spatial-relations.json"
     box_part_spatial_relations_csv_path = out_dir / f"{member_id}-box-part-spatial-relations.csv"
     box_station_topology_diagnostics_path = out_dir / f"{member_id}-box-station-topology-diagnostics.json"
@@ -144,6 +150,16 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
     box_main_material_segments_path.write_text(json.dumps(box_main_material_segments, ensure_ascii=False, indent=2), encoding="utf-8")
     pd.DataFrame(_flatten_box_main_material_segment_groups(box_main_material_segments)).to_csv(
         box_main_material_segments_csv_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    composite_segments = [segment.to_dict() for segment in result.composite_main_material_segments]
+    composite_main_material_segments_path.write_text(
+        json.dumps(composite_segments, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    pd.DataFrame(_flatten_composite_main_material_segments(composite_segments)).to_csv(
+        composite_main_material_segments_csv_path,
         index=False,
         encoding="utf-8-sig",
     )
@@ -197,6 +213,8 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
             manufacturing_scope_csv_path,
             box_main_material_segments_path,
             box_main_material_segments_csv_path,
+            composite_main_material_segments_path,
+            composite_main_material_segments_csv_path,
             box_part_spatial_relations_path,
             box_part_spatial_relations_csv_path,
             box_station_topology_diagnostics_path,
@@ -225,6 +243,8 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         manufacturing_scope_csv_path=manufacturing_scope_csv_path,
         box_main_material_segments_path=box_main_material_segments_path,
         box_main_material_segments_csv_path=box_main_material_segments_csv_path,
+        composite_main_material_segments_path=composite_main_material_segments_path,
+        composite_main_material_segments_csv_path=composite_main_material_segments_csv_path,
         box_part_spatial_relations_path=box_part_spatial_relations_path,
         box_part_spatial_relations_csv_path=box_part_spatial_relations_csv_path,
         box_station_topology_diagnostics_path=box_station_topology_diagnostics_path,
@@ -284,6 +304,29 @@ def _flatten_box_main_material_segment_groups(groups: list[dict[str, object]]) -
                 }
             )
     return rows
+
+
+def _flatten_composite_main_material_segments(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    flat = []
+    for segment in rows:
+        for plate in segment.get("main_plates", []):
+            flat.append(
+                {
+                    "assembly_id": segment.get("assembly_id", ""),
+                    "segment_id": segment.get("segment_id", ""),
+                    "station_start": segment.get("station_start", ""),
+                    "station_end": segment.get("station_end", ""),
+                    "segment_type": segment.get("segment_type", ""),
+                    "confidence": segment.get("confidence", ""),
+                    "part_id": plate.get("part_id", ""),
+                    "part_position": plate.get("part_position", ""),
+                    "primary_role": plate.get("primary_role", ""),
+                    "secondary_evidence": ";".join(plate.get("secondary_evidence", [])),
+                    "evidence_codes": ";".join(plate.get("evidence_codes", [])),
+                }
+            )
+    return flat
+
 
 def _flatten_box_part_spatial_relations(rows: list[dict[str, object]]) -> list[dict[str, object]]:
     return [
@@ -375,6 +418,8 @@ def _build_markdown(
     manufacturing_scope_csv_path: Path,
     box_main_material_segments_path: Path,
     box_main_material_segments_csv_path: Path,
+    composite_main_material_segments_path: Path,
+    composite_main_material_segments_csv_path: Path,
     box_part_spatial_relations_path: Path,
     box_part_spatial_relations_csv_path: Path,
     box_station_topology_diagnostics_path: Path,
@@ -391,6 +436,7 @@ def _build_markdown(
     conflicts = [item for item in aligned if item["prediction_status"] == "MATCH_CONFLICT"]
     residual = [item for item in aligned if item["prediction_status"] not in {"MATCH", "MATCH_CONFLICT"}]
     spatial_counts = Counter(item.role for item in result.spatial_classifications)
+    composite_segment_counts = Counter(item.segment_type.value for item in result.composite_main_material_segments)
     box_relation_counts = Counter(item.relation_to_box_body for item in result.box_part_spatial_relations)
     box_topology_counts = Counter(item.topology_status for item in result.box_station_topology_diagnostics)
     h_side_counts = Counter(item.h_side for item in result.h_beam_part_sides)
@@ -436,6 +482,13 @@ def _build_markdown(
             lines.append("")
 
 
+    if result.composite_main_material_segments:
+        lines += [
+            "## 组合截面主材分段",
+            "",
+            "- 分段类型：" + "；".join(f"`{key}`={value}" for key, value in composite_segment_counts.most_common()),
+            "",
+        ]
     if result.box_part_spatial_relations:
         lines += [
             "## BOX 内外关系",
@@ -502,6 +555,8 @@ def _build_markdown(
         f"- Manufacturing Scope Candidates CSV：`{manufacturing_scope_csv_path}`",
         f"- BOX Main Material Segment Groups JSON：`{box_main_material_segments_path}`",
         f"- BOX Main Material Segment Groups CSV：`{box_main_material_segments_csv_path}`",
+        f"- Composite Main Material Segments JSON：`{composite_main_material_segments_path}`",
+        f"- Composite Main Material Segments CSV：`{composite_main_material_segments_csv_path}`",
         f"- BOX Part Spatial Relations JSON：`{box_part_spatial_relations_path}`",
         f"- BOX Part Spatial Relations CSV：`{box_part_spatial_relations_csv_path}`",
         f"- BOX Station Topology Diagnostics JSON：`{box_station_topology_diagnostics_path}`",
@@ -510,5 +565,4 @@ def _build_markdown(
         f"- H Beam Part Sides CSV：`{h_beam_part_sides_csv_path}`",
     ]
     return "\n".join(lines)
-
 
