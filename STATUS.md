@@ -112,6 +112,8 @@
 
 2026-07-06：已确认 BOX 柱子渐进式构件图方向：步骤粒度按“能表达尺寸和位置关系的信息组/阶段”，不按每个小零件单独分页；第一阶段输出离线步骤计划，Tekla 2017 Drawing API 优先做出图 POC，CAD/DXF 作为兜底。设计见 `docs/design/2026-07-06-box-column-progressive-drawing-steps.md`。
 
+2026-07-06：BOX 柱子渐进式构件图第一版已落地。离线 pipeline/report 输出 `box-assembly-drawing-steps.json/csv/md/dxf`；当前 Tekla 选中构件 `T3-3GZ-6` 生成 29 步（基准主板、侧壁、7 个内部组、盖板、19 个外部簇），DXF 预览见 `outputs/box-progressive-drawing-selected-20260706/T3-3GZ-6-box-assembly-drawing-steps.dxf`。Tekla 2017 POC 已定位并修复外部 API 连接前置条件 `SESSIONNAME=Console`，并验证 `DrawingCreator + ch_column.xdproc` 可生成构件图；自动打开生成图纸并套用隐藏/标注仍待下一步突破。验证记录：`docs/verification/2026-07-06-box-column-progressive-drawing-steps.md`。
+
 ## 已确认业务口径
 
 - `T3-H-558s/x/f` 这类 Excel 加工板可以来自 `BH400*200*7*10` 型钢拆板；它们不是 Tekla 独立零件缺失。
@@ -146,7 +148,7 @@
 2. 对 `T3-P-3449`、`T3-P-4910` 补查是否为选中构件缺实体、制造口径差异或导出范围问题；不得用几何相似件自动改号。
 3. 基于统一主材分段入口继续补策略：H/GL 减少对 name 的依赖、BOX 在导出器补原生 `boxSectionEvidence`、T 型/十字/圆管新增策略，并将报告文件名从 box-main-material 迁移为通用 main-material。
 4. 未实现项：构件装配顺序、焊接顺序、配送顺序、图纸自动标注的数据契约、流水线和报告。
-5. 当前新增目标：先做 BOX 柱子渐进式构件图第一版，输出 `box-assembly-drawing-steps.json/csv/md`，并用 Tekla 2017 POC 验证按步骤隐藏/显示零件和插入标注的可行性。
+5. 当前 BOX 渐进式构件图第一版已输出 `box-assembly-drawing-steps.json/csv/md/dxf`；下一步是打开已由 AutoDrawing 生成的 `T3-3GZ-6` 构件图，继续验证 Tekla 2017 POC 对 active drawing 按步骤隐藏/显示零件和插入标注。
 
 ## 最新验证
 

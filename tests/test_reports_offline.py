@@ -7,6 +7,12 @@ import pandas as pd
 
 from zijinhua_tekla.bracket_classifier import AppendageRoleClassification
 from zijinhua_tekla.classifiers.box_main_material_segments import BoxMainMaterialSegmentGroup, SegmentContinuityLevel
+from zijinhua_tekla.classifiers.box_assembly_drawing_steps import (
+    BoxAssemblyDrawingStep,
+    DrawingDimensionTarget,
+    DrawingPartMarkTarget,
+    DrawingViewHint,
+)
 from zijinhua_tekla.classifiers.box_part_spatial_relations import BoxPartSpatialRelation
 from zijinhua_tekla.classifiers.box_station_topology_diagnostics import BoxStationTopologyDiagnostic
 from zijinhua_tekla.classifiers.composite_main_material_segments import (
@@ -236,6 +242,45 @@ class OfflineReportTests(unittest.TestCase):
                     confidence=0.86,
                 ),
             ],
+            box_assembly_drawing_steps=[
+                BoxAssemblyDrawingStep(
+                    assembly_id="100",
+                    member_id="A-GKZ-1",
+                    step_no=1,
+                    step_type="BASE_MAIN_WALL",
+                    title="基准主板",
+                    station_range="0.0-3000.0",
+                    new_part_ids=["401"],
+                    visible_part_ids=["401"],
+                    reference_part_ids=[],
+                    hidden_part_ids=["10"],
+                    part_mark_targets=[
+                        DrawingPartMarkTarget(
+                            part_id="401",
+                            part_position="A-P-401",
+                            profile="PL16*900",
+                            name="COLUMN",
+                        )
+                    ],
+                    dimension_targets=[
+                        DrawingDimensionTarget(
+                            kind="station_range",
+                            part_ids=["401"],
+                            from_ref="member_start",
+                            to_ref="member_end",
+                            label="基准主板 station 范围",
+                        )
+                    ],
+                    view_hints=[
+                        DrawingViewHint(
+                            view_mode="box_base_reference",
+                            purpose="show_base_wall_reference",
+                        )
+                    ],
+                    evidence_codes=["BOX_MAIN_WALL_CONFIRMED_SET", "BASE_WALL_SELECTED"],
+                    confidence=0.9,
+                )
+            ],
             h_beam_part_sides=[
                 HBeamPartSide(
                     assembly_id="100",
@@ -281,11 +326,15 @@ class OfflineReportTests(unittest.TestCase):
             box_segment_rows = json.loads(paths.box_main_material_segments_path.read_text(encoding="utf-8"))
             composite_rows = json.loads(paths.composite_main_material_segments_path.read_text(encoding="utf-8"))
             box_relation_rows = json.loads(paths.box_part_spatial_relations_path.read_text(encoding="utf-8"))
+            drawing_step_rows = json.loads(paths.box_assembly_drawing_steps_path.read_text(encoding="utf-8"))
             box_topology_rows = json.loads(paths.box_station_topology_diagnostics_path.read_text(encoding="utf-8"))
             h_side_rows = json.loads(paths.h_beam_part_sides_path.read_text(encoding="utf-8"))
             box_segment_csv_rows = pd.read_csv(paths.box_main_material_segments_csv_path)
             composite_csv_rows = pd.read_csv(paths.composite_main_material_segments_csv_path)
             box_relation_csv_rows = pd.read_csv(paths.box_part_spatial_relations_csv_path)
+            drawing_step_csv_rows = pd.read_csv(paths.box_assembly_drawing_steps_csv_path)
+            drawing_step_md = paths.box_assembly_drawing_steps_md_path.read_text(encoding="utf-8")
+            drawing_step_dxf = paths.box_assembly_drawing_steps_dxf_path.read_text(encoding="utf-8")
             box_topology_csv_rows = pd.read_csv(paths.box_station_topology_diagnostics_csv_path)
             h_side_csv_rows = pd.read_csv(paths.h_beam_part_sides_csv_path)
             markdown = paths.markdown_path.read_text(encoding="utf-8")
@@ -312,6 +361,10 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual("A-GKZ-1-composite-main-material-segments.csv", paths.composite_main_material_segments_csv_path.name)
         self.assertEqual("A-GKZ-1-box-part-spatial-relations.json", paths.box_part_spatial_relations_path.name)
         self.assertEqual("A-GKZ-1-box-part-spatial-relations.csv", paths.box_part_spatial_relations_csv_path.name)
+        self.assertEqual("A-GKZ-1-box-assembly-drawing-steps.json", paths.box_assembly_drawing_steps_path.name)
+        self.assertEqual("A-GKZ-1-box-assembly-drawing-steps.csv", paths.box_assembly_drawing_steps_csv_path.name)
+        self.assertEqual("A-GKZ-1-box-assembly-drawing-steps.md", paths.box_assembly_drawing_steps_md_path.name)
+        self.assertEqual("A-GKZ-1-box-assembly-drawing-steps.dxf", paths.box_assembly_drawing_steps_dxf_path.name)
         self.assertEqual("A-GKZ-1-box-station-topology-diagnostics.json", paths.box_station_topology_diagnostics_path.name)
         self.assertEqual("A-GKZ-1-box-station-topology-diagnostics.csv", paths.box_station_topology_diagnostics_csv_path.name)
         self.assertEqual("A-GKZ-1-h-beam-part-sides.json", paths.h_beam_part_sides_path.name)
@@ -372,6 +425,14 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual("MAIN_WALL", box_relation_rows[0]["relation_to_box_body"])
         self.assertEqual(["401", "10"], list(box_relation_csv_rows["part_id"].astype(str)))
         self.assertEqual(["MAIN_WALL", "INSIDE_BODY"], list(box_relation_csv_rows["relation_to_box_body"]))
+        self.assertEqual("boxAssemblyDrawingSteps.v1", drawing_step_rows["source"])
+        self.assertEqual("BASE_MAIN_WALL", drawing_step_rows["steps"][0]["step_type"])
+        self.assertEqual(["BASE_MAIN_WALL"], list(drawing_step_csv_rows["step_type"]))
+        self.assertIn("# A-GKZ-1 BOX 渐进式构件图步骤", drawing_step_md)
+        self.assertIn("BASE_MAIN_WALL", drawing_step_md)
+        self.assertIn("A-GKZ-1 BOX progressive drawing steps", drawing_step_dxf)
+        self.assertIn("A-P-401", drawing_step_dxf)
+        self.assertIn("station_range", drawing_step_dxf)
         self.assertEqual("CLOSED_WITH_CAVITY", box_topology_rows[0]["topology_status"])
         self.assertEqual(["CLOSED_WITH_CAVITY"], list(box_topology_csv_rows["topology_status"]))
         self.assertEqual(["BODY_CORE"], list(box_topology_csv_rows["station_scope"]))
@@ -414,6 +475,9 @@ class OfflineReportTests(unittest.TestCase):
         self.assertIn("`INSIDE_BODY`=1", markdown)
         self.assertIn("BOX Part Spatial Relations JSON", markdown)
         self.assertIn("BOX Part Spatial Relations CSV", markdown)
+        self.assertIn("BOX Assembly Drawing Steps JSON", markdown)
+        self.assertIn("box-assembly-drawing-steps.json", markdown)
+        self.assertIn("BOX Assembly Drawing Steps DXF", markdown)
         self.assertIn("## BOX Station Topology 诊断", markdown)
         self.assertIn("`CLOSED_WITH_CAVITY`=1", markdown)
         self.assertIn("BOX Station Topology Diagnostics JSON", markdown)

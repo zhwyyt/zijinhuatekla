@@ -226,6 +226,9 @@ class OfflinePipelineTests(unittest.TestCase):
             "BOX_MAIN_WALL_PLATE",
             result.composite_main_material_segments[0].main_plates[0].primary_role.value,
         )
+        self.assertTrue(result.box_assembly_drawing_steps)
+        self.assertEqual("BASE_MAIN_WALL", result.box_assembly_drawing_steps[0].step_type)
+        self.assertEqual("A-P-1", result.box_assembly_drawing_steps[0].part_mark_targets[0].part_position)
 
     def test_run_offline_analysis_outputs_h_beam_part_sides_for_gl_member(self):
         with tempfile.TemporaryDirectory() as temp_dir:

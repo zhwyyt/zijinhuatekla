@@ -9,7 +9,8 @@
 - [ ] 建立焊接顺序数据契约与报告。
 - [ ] 建立配送顺序数据契约与报告。
 - [ ] 建立图纸自动标注数据契约与报告。
-- [ ] 建立 BOX 柱子渐进式构件图步骤计划与 Tekla 2017 出图 POC：按信息组/阶段逐步增加主壁板、内部组和外部簇，优先 Tekla 图纸视图控制，CAD/DXF 作为兜底；设计见 `docs/design/2026-07-06-box-column-progressive-drawing-steps.md`。
+- [x] 建立 BOX 柱子渐进式构件图步骤计划与第一版可查看输出：已输出 `box-assembly-drawing-steps.json/csv/md/dxf`，按信息组/阶段逐步增加主壁板、内部组和外部簇；Tekla 2017 POC 已验证 API 连接与 AutoDrawing 生成构件图，CAD/DXF 作为当前第一版查看兜底；设计见 `docs/design/2026-07-06-box-column-progressive-drawing-steps.md`，验证见 `docs/verification/2026-07-06-box-column-progressive-drawing-steps.md`。
+- [ ] 继续 Tekla 2017 active drawing 套图验证：打开已由 AutoDrawing 生成的 `T3-3GZ-6` 构件图后，运行 POC 按步骤隐藏/显示零件、插入零件标注并保存图纸。
 - [x] 建立箱型柱主壁板制造整板与 Tekla 分段复核候选报告。
 - [x] 人工确认 T3 箱型柱主材分段集合，并补 Case Bank 回归样例。
 - [x] 补轴线 station 与连续性初版证据，制造范围报告输出 `station_ranges/continuity_gaps/continuity_level`。

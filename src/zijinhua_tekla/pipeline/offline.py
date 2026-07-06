@@ -20,6 +20,7 @@ from ..classifiers.composite_main_material_segments import (
     classify_composite_main_material_segments,
 )
 from ..classifiers.box_part_spatial_relations import BoxPartSpatialRelation, classify_box_part_spatial_relations
+from ..classifiers.box_assembly_drawing_steps import BoxAssemblyDrawingStep, build_box_assembly_drawing_steps
 from ..classifiers.box_station_topology_diagnostics import BoxStationTopologyDiagnostic, diagnose_box_station_topology
 from ..classifiers.h_beam_part_sides import HBeamPartSide, classify_h_beam_part_sides
 from ..features import build_feature_index, feature_snapshots_from_bundle_parts
@@ -41,6 +42,7 @@ class OfflinePipelineResult:
     box_main_material_segment_groups: list[BoxMainMaterialSegmentGroup] = field(default_factory=list)
     composite_main_material_segments: list[CompositeMainMaterialSegment] = field(default_factory=list)
     box_part_spatial_relations: list[BoxPartSpatialRelation] = field(default_factory=list)
+    box_assembly_drawing_steps: list[BoxAssemblyDrawingStep] = field(default_factory=list)
     box_station_topology_diagnostics: list[BoxStationTopologyDiagnostic] = field(default_factory=list)
     h_beam_part_sides: list[HBeamPartSide] = field(default_factory=list)
 
@@ -89,6 +91,17 @@ def run_offline_analysis(
         appendage_part_ids=outside_box_part_ids,
     )
     outside_part_ids = _outside_part_ids(spatial_classifications)
+    box_part_spatial_relations = classify_box_part_spatial_relations(
+        assembly, member, main_material_groups, outside_part_ids=outside_part_ids
+    )
+    box_assembly_drawing_steps = build_box_assembly_drawing_steps(
+        assembly=assembly,
+        member_id=member_id,
+        aligned_rows=aligned,
+        main_wall_groups=main_material_groups,
+        box_part_spatial_relations=box_part_spatial_relations,
+        spatial_classifications=spatial_classifications,
+    )
     return OfflinePipelineResult(
         member=member,
         bundle=bundle,
@@ -98,9 +111,8 @@ def run_offline_analysis(
         spatial_classifications=spatial_classifications,
         box_main_material_segment_groups=main_material_groups,
         composite_main_material_segments=composite_main_material_segments,
-        box_part_spatial_relations=classify_box_part_spatial_relations(
-            assembly, member, main_material_groups, outside_part_ids=outside_part_ids
-        ),
+        box_part_spatial_relations=box_part_spatial_relations,
+        box_assembly_drawing_steps=box_assembly_drawing_steps,
         box_station_topology_diagnostics=diagnose_box_station_topology(assembly, main_material_groups),
         h_beam_part_sides=classify_h_beam_part_sides(assembly, member),
     )

@@ -16,6 +16,7 @@ from ..quality.candidates import (
 )
 from ..quality.manufacturing_scope import build_manufacturing_scope_report, flatten_manufacturing_scope_report
 from ..quality.review import build_review_tasks, save_review_tasks_csv, save_review_tasks_json, summarize_review_tasks
+from .box_progressive_dxf import build_box_assembly_drawing_steps_dxf
 
 
 @dataclass(frozen=True)
@@ -42,6 +43,10 @@ class OfflineReportPaths:
     composite_main_material_segments_csv_path: Path
     box_part_spatial_relations_path: Path
     box_part_spatial_relations_csv_path: Path
+    box_assembly_drawing_steps_path: Path
+    box_assembly_drawing_steps_csv_path: Path
+    box_assembly_drawing_steps_md_path: Path
+    box_assembly_drawing_steps_dxf_path: Path
     box_station_topology_diagnostics_path: Path
     box_station_topology_diagnostics_csv_path: Path
     h_beam_part_sides_path: Path
@@ -72,6 +77,10 @@ class OfflineReportPaths:
             self.composite_main_material_segments_csv_path,
             self.box_part_spatial_relations_path,
             self.box_part_spatial_relations_csv_path,
+            self.box_assembly_drawing_steps_path,
+            self.box_assembly_drawing_steps_csv_path,
+            self.box_assembly_drawing_steps_md_path,
+            self.box_assembly_drawing_steps_dxf_path,
             self.box_station_topology_diagnostics_path,
             self.box_station_topology_diagnostics_csv_path,
             self.h_beam_part_sides_path,
@@ -104,6 +113,10 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
     composite_main_material_segments_csv_path = out_dir / f"{member_id}-composite-main-material-segments.csv"
     box_part_spatial_relations_path = out_dir / f"{member_id}-box-part-spatial-relations.json"
     box_part_spatial_relations_csv_path = out_dir / f"{member_id}-box-part-spatial-relations.csv"
+    box_assembly_drawing_steps_path = out_dir / f"{member_id}-box-assembly-drawing-steps.json"
+    box_assembly_drawing_steps_csv_path = out_dir / f"{member_id}-box-assembly-drawing-steps.csv"
+    box_assembly_drawing_steps_md_path = out_dir / f"{member_id}-box-assembly-drawing-steps.md"
+    box_assembly_drawing_steps_dxf_path = out_dir / f"{member_id}-box-assembly-drawing-steps.dxf"
     box_station_topology_diagnostics_path = out_dir / f"{member_id}-box-station-topology-diagnostics.json"
     box_station_topology_diagnostics_csv_path = out_dir / f"{member_id}-box-station-topology-diagnostics.csv"
     h_beam_part_sides_path = out_dir / f"{member_id}-h-beam-part-sides.json"
@@ -173,6 +186,29 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         index=False,
         encoding="utf-8-sig",
     )
+    box_assembly_drawing_steps = {
+        "assembly_id": result.assembly.get("assemblyId", ""),
+        "member_id": member_id,
+        "source": "boxAssemblyDrawingSteps.v1",
+        "steps": [item.to_dict() for item in result.box_assembly_drawing_steps],
+    }
+    box_assembly_drawing_steps_path.write_text(
+        json.dumps(box_assembly_drawing_steps, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    pd.DataFrame(_flatten_box_assembly_drawing_steps(box_assembly_drawing_steps["steps"])).to_csv(
+        box_assembly_drawing_steps_csv_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    box_assembly_drawing_steps_md_path.write_text(
+        _build_box_assembly_drawing_steps_markdown(member_id, box_assembly_drawing_steps["steps"]),
+        encoding="utf-8",
+    )
+    box_assembly_drawing_steps_dxf_path.write_text(
+        build_box_assembly_drawing_steps_dxf(box_assembly_drawing_steps),
+        encoding="utf-8",
+    )
     box_station_topology_diagnostics = [item.to_dict() for item in result.box_station_topology_diagnostics]
     box_station_topology_diagnostics_path.write_text(
         json.dumps(box_station_topology_diagnostics, ensure_ascii=False, indent=2),
@@ -217,6 +253,10 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
             composite_main_material_segments_csv_path,
             box_part_spatial_relations_path,
             box_part_spatial_relations_csv_path,
+            box_assembly_drawing_steps_path,
+            box_assembly_drawing_steps_csv_path,
+            box_assembly_drawing_steps_md_path,
+            box_assembly_drawing_steps_dxf_path,
             box_station_topology_diagnostics_path,
             box_station_topology_diagnostics_csv_path,
             h_beam_part_sides_path,
@@ -247,6 +287,10 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         composite_main_material_segments_csv_path=composite_main_material_segments_csv_path,
         box_part_spatial_relations_path=box_part_spatial_relations_path,
         box_part_spatial_relations_csv_path=box_part_spatial_relations_csv_path,
+        box_assembly_drawing_steps_path=box_assembly_drawing_steps_path,
+        box_assembly_drawing_steps_csv_path=box_assembly_drawing_steps_csv_path,
+        box_assembly_drawing_steps_md_path=box_assembly_drawing_steps_md_path,
+        box_assembly_drawing_steps_dxf_path=box_assembly_drawing_steps_dxf_path,
         box_station_topology_diagnostics_path=box_station_topology_diagnostics_path,
         box_station_topology_diagnostics_csv_path=box_station_topology_diagnostics_csv_path,
         h_beam_part_sides_path=h_beam_part_sides_path,
@@ -348,6 +392,79 @@ def _flatten_box_part_spatial_relations(rows: list[dict[str, object]]) -> list[d
         }
         for row in rows
     ]
+
+
+def _flatten_box_assembly_drawing_steps(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    flattened = []
+    for row in rows:
+        flattened.append(
+            {
+                "assembly_id": row.get("assembly_id", ""),
+                "member_id": row.get("member_id", ""),
+                "step_no": row.get("step_no", ""),
+                "step_type": row.get("step_type", ""),
+                "title": row.get("title", ""),
+                "station_range": row.get("station_range", ""),
+                "new_part_ids": ";".join(str(value) for value in row.get("new_part_ids", [])),
+                "visible_part_ids": ";".join(str(value) for value in row.get("visible_part_ids", [])),
+                "hidden_part_ids": ";".join(str(value) for value in row.get("hidden_part_ids", [])),
+                "new_part_positions": ";".join(
+                    str(target.get("part_position", ""))
+                    for target in row.get("part_mark_targets", [])
+                    if isinstance(target, dict)
+                ),
+                "dimension_kinds": ";".join(
+                    str(target.get("kind", ""))
+                    for target in row.get("dimension_targets", [])
+                    if isinstance(target, dict)
+                ),
+                "view_modes": ";".join(
+                    str(hint.get("view_mode", ""))
+                    for hint in row.get("view_hints", [])
+                    if isinstance(hint, dict)
+                ),
+                "confidence": row.get("confidence", ""),
+                "issue_category": row.get("issue_category", ""),
+                "evidence_codes": ";".join(str(value) for value in row.get("evidence_codes", [])),
+            }
+        )
+    return flattened
+
+
+def _build_box_assembly_drawing_steps_markdown(member_id: str, rows: list[dict[str, object]]) -> str:
+    lines = [
+        f"# {member_id} BOX 渐进式构件图步骤",
+        "",
+        f"- 步骤数：`{len(rows)}`",
+        "",
+    ]
+    for row in rows:
+        mark_targets = row.get("part_mark_targets", [])
+        positions = [
+            str(target.get("part_position", ""))
+            for target in mark_targets
+            if isinstance(target, dict) and target.get("part_position")
+        ]
+        dimension_kinds = [
+            str(target.get("kind", ""))
+            for target in row.get("dimension_targets", [])
+            if isinstance(target, dict) and target.get("kind")
+        ]
+        lines.append(
+            f"- Step `{row.get('step_no', '')}` `{row.get('step_type', '')}`："
+            f"{row.get('title', '')}；新增 `{';'.join(positions)}`；"
+            f"尺寸 `{';'.join(dimension_kinds)}`；视图 `{_step_view_modes(row)}`。"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _step_view_modes(row: dict[str, object]) -> str:
+    return ";".join(
+        str(hint.get("view_mode", ""))
+        for hint in row.get("view_hints", [])
+        if isinstance(hint, dict) and hint.get("view_mode")
+    )
 
 
 def _flatten_box_station_topology_diagnostics(rows: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -454,6 +571,10 @@ def _build_markdown(
     composite_main_material_segments_csv_path: Path,
     box_part_spatial_relations_path: Path,
     box_part_spatial_relations_csv_path: Path,
+    box_assembly_drawing_steps_path: Path,
+    box_assembly_drawing_steps_csv_path: Path,
+    box_assembly_drawing_steps_md_path: Path,
+    box_assembly_drawing_steps_dxf_path: Path,
     box_station_topology_diagnostics_path: Path,
     box_station_topology_diagnostics_csv_path: Path,
     h_beam_part_sides_path: Path,
@@ -470,6 +591,7 @@ def _build_markdown(
     spatial_counts = Counter(item.role for item in result.spatial_classifications)
     composite_segment_counts = Counter(item.segment_type.value for item in result.composite_main_material_segments)
     box_relation_counts = Counter(item.relation_to_box_body for item in result.box_part_spatial_relations)
+    box_drawing_step_counts = Counter(item.step_type for item in result.box_assembly_drawing_steps)
     box_topology_counts = Counter(item.topology_status for item in result.box_station_topology_diagnostics)
     h_side_counts = Counter(item.h_side for item in result.h_beam_part_sides)
 
@@ -529,6 +651,13 @@ def _build_markdown(
             "## BOX 内外关系",
             "",
             "- 关系分布：" + "；".join(f"`{key}`={value}" for key, value in box_relation_counts.most_common()),
+            "",
+        ]
+    if result.box_assembly_drawing_steps:
+        lines += [
+            "## BOX 渐进式构件图步骤",
+            "",
+            "- 步骤分布：" + "；".join(f"`{key}`={value}" for key, value in box_drawing_step_counts.most_common()),
             "",
         ]
     if result.box_station_topology_diagnostics:
@@ -594,6 +723,10 @@ def _build_markdown(
         f"- Composite Main Material Segments CSV：`{composite_main_material_segments_csv_path}`",
         f"- BOX Part Spatial Relations JSON：`{box_part_spatial_relations_path}`",
         f"- BOX Part Spatial Relations CSV：`{box_part_spatial_relations_csv_path}`",
+        f"- BOX Assembly Drawing Steps JSON：`{box_assembly_drawing_steps_path}`",
+        f"- BOX Assembly Drawing Steps CSV：`{box_assembly_drawing_steps_csv_path}`",
+        f"- BOX Assembly Drawing Steps Markdown：`{box_assembly_drawing_steps_md_path}`",
+        f"- BOX Assembly Drawing Steps DXF：`{box_assembly_drawing_steps_dxf_path}`",
         f"- BOX Station Topology Diagnostics JSON：`{box_station_topology_diagnostics_path}`",
         f"- BOX Station Topology Diagnostics CSV：`{box_station_topology_diagnostics_csv_path}`",
         f"- H Beam Part Sides JSON：`{h_beam_part_sides_path}`",
