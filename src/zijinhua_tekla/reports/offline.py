@@ -403,6 +403,34 @@ def _flatten_h_beam_part_sides(rows: list[dict[str, object]]) -> list[dict[str, 
     ]
 
 
+
+def _h_profile_summary_lines(assembly: dict[str, object], segments: list[object]) -> list[str]:
+    h_segments = [segment for segment in segments if getattr(getattr(segment, "segment_type", None), "value", "") == "H_OR_BH_SECTION"]
+    if not h_segments:
+        return []
+    parts_by_id = {str(part.get("partId") or ""): part for part in assembly.get("parts", []) if isinstance(part, dict)}
+    main_part_id = str(assembly.get("mainPartId") or "")
+    main_part = parts_by_id.get(main_part_id, {})
+    lines: list[str] = []
+    if main_part_id:
+        lines.append(
+            "- 主零件："
+            f"`{main_part_id} / {main_part.get('partPosition', '')} / {main_part.get('name', '')} / {main_part.get('profileString', '')}`"
+        )
+    for segment in h_segments:
+        plates = getattr(segment, "main_plates", [])
+        if not plates:
+            continue
+        lines.append(f"- `{getattr(segment, 'segment_id', '')}` 主材明细：")
+        for plate in plates:
+            part = parts_by_id.get(str(getattr(plate, "part_id", "")), {})
+            name = part.get("name", "")
+            profile = part.get("profileString", "")
+            suffix = f" / {name} / {profile}" if name or profile else ""
+            lines.append(
+                f"  - `{getattr(plate, 'part_position', '')}`：`{getattr(getattr(plate, 'primary_role', None), 'value', '')}`{suffix}"
+            )
+    return lines
 def _build_markdown(
     result: OfflinePipelineResult,
     member_id: str,
@@ -493,6 +521,9 @@ def _build_markdown(
             "- 分段类型：" + "；".join(f"`{key}`={value}" for key, value in composite_segment_counts.most_common()),
             "",
         ]
+        h_profile_lines = _h_profile_summary_lines(assembly, result.composite_main_material_segments)
+        if h_profile_lines:
+            lines += ["## H/GL 型材主体与主材", "", *h_profile_lines, ""]
     if result.box_part_spatial_relations:
         lines += [
             "## BOX 内外关系",
@@ -569,4 +600,5 @@ def _build_markdown(
         f"- H Beam Part Sides CSV：`{h_beam_part_sides_csv_path}`",
     ]
     return "\n".join(lines)
+
 

@@ -13,6 +13,8 @@ class AppendageClusterFeatures:
     assembly_span: float = 0.0
     centroid_outside_body: bool = False
     has_end_connection_signal: bool = False
+    external_connection_count: int = 0
+    internal_weld_connection_count: int = 0
     bolt_count: int = 0
     cluster_volume: float = 0.0
     max_thickness: float = 0.0
@@ -41,6 +43,10 @@ def _bracket_evidence(
     options: BracketClassifierOptions,
 ) -> list[str]:
     evidence = []
+    if features.external_connection_count > 0:
+        evidence.append("EXTERNAL_CONNECTION")
+    if len(features.part_ids) == 1 and features.internal_weld_connection_count == 0:
+        evidence.append("SINGLE_PLATE_NO_INTERNAL_WELD")
     if features.root_contact_ratio <= options.bracket_root_contact_ratio_max:
         evidence.append("ROOT_LOCAL_ATTACHMENT")
     if features.cantilever_ratio >= options.bracket_overhang_ratio_min:
@@ -63,6 +69,7 @@ def classify_appendage_cluster(
 ) -> AppendageRoleClassification:
     options = options or BracketClassifierOptions()
     required = [
+        "EXTERNAL_CONNECTION",
         "ROOT_LOCAL_ATTACHMENT",
         "OVERHANG_DOMINANT",
         "AXIS_SPAN_LIMITED",
@@ -72,7 +79,17 @@ def classify_appendage_cluster(
     evidence = _bracket_evidence(features, options)
     missing = [code for code in required if code not in evidence]
 
-    if "NOT_END_CONNECTION" in evidence and len(evidence) >= 4:
+    if "EXTERNAL_CONNECTION" in evidence and "SINGLE_PLATE_NO_INTERNAL_WELD" in evidence:
+        return AppendageRoleClassification(
+            cluster_id=features.cluster_id,
+            role="ConnectionPlate",
+            confidence=0.86,
+            part_ids=features.part_ids,
+            evidence_codes=evidence,
+            missing_codes=missing,
+        )
+
+    if "EXTERNAL_CONNECTION" in evidence and "NOT_END_CONNECTION" in evidence and len(evidence) >= 4:
         return AppendageRoleClassification(
             cluster_id=features.cluster_id,
             role="Bracket",

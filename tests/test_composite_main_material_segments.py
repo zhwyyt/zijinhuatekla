@@ -1,3 +1,4 @@
+from types import SimpleNamespace
 import unittest
 
 from zijinhua_tekla.classifiers.composite_main_material_segments import (
@@ -106,6 +107,7 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
 
         self.assertEqual(1, len(segments))
         self.assertEqual("H_OR_BH_SECTION", segments[0].segment_type.value)
+        self.assertEqual((0.0, 13114.9), (segments[0].station_start, segments[0].station_end))
         roles = {plate.part_position: plate.primary_role.value for plate in segments[0].main_plates}
         self.assertEqual("H_TOP_FLANGE_MAIN_PLATE", roles["T3-P-4866"])
         self.assertEqual("H_WEB_MAIN_PLATE", roles["T3-P-4753"])
@@ -114,6 +116,175 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
         self.assertEqual("H_BOTTOM_FLANGE_MAIN_PLATE", roles["T3-P-4862"])
         self.assertIn("adapted_from_main_material_segment_groups", segments[0].evidence_codes)
 
+    def test_prefers_native_h_station_frames_over_adapted_main_material_groups(self):
+        from zijinhua_tekla.classifiers.box_main_material_segments import classify_main_material_segment_groups
+
+        assembly = _h_station_frame_fixture()
+        groups = classify_main_material_segment_groups(assembly)
+
+        segments = classify_composite_main_material_segments(assembly, main_material_groups=groups)
+
+        self.assertEqual(1, len(segments))
+        self.assertEqual("H_OR_BH_SECTION", segments[0].segment_type.value)
+        self.assertEqual((0, 4750), (segments[0].station_start, segments[0].station_end))
+        self.assertIn("H_GL_STATION_FRAME_NATIVE_COMPOSITE", segments[0].evidence_codes)
+        self.assertNotIn("adapted_from_main_material_segment_groups", segments[0].evidence_codes)
+        roles = {plate.part_position: plate.primary_role.value for plate in segments[0].main_plates}
+        self.assertEqual("H_TOP_FLANGE_MAIN_PLATE", roles["T2-3B-top"])
+        self.assertEqual("H_WEB_MAIN_PLATE", roles["T2-3B-web"])
+        self.assertEqual("H_BOTTOM_FLANGE_MAIN_PLATE", roles["T2-3B-bottom"])
+        self.assertNotIn("T2-3B-local", roles)
+        self.assertTrue(
+            all("h_beam_station_frame" in plate.secondary_evidence for plate in segments[0].main_plates)
+        )
+    def test_native_h_station_frames_expand_main_plate_chain_by_axis_continuity(self):
+        assembly = _h_station_frame_fixture()
+        assembly["metadata"]["memberAxisEvidence"]["length"] = 6200
+        assembly["parts"].extend(
+            [
+                _part("top-tail", "T2-3B-top-tail", 4750, 6200, "Y", 0, 180, 240, 20, name="乱码"),
+                _part("bottom-tail", "T2-3B-bottom-tail", 4750, 6200, "Y", 0, -180, 240, 20, name="乱码"),
+                _part("top-short", "T2-3B-top-short", 4500, 5000, "Y", 0, 180, 240, 20, name="乱码"),
+            ]
+        )
+        assembly["relationships"].extend([_rel("top", "top-tail", "Contact"), _rel("bottom", "bottom-tail", "Contact")])
+        for station in range(5000, 6500, 250):
+            assembly["metadata"]["hBeamSectionEvidence"]["stationFrames"].append(
+                {
+                    "station": station,
+                    "topFlangePartId": "top-tail",
+                    "webPartId": "web",
+                    "bottomFlangePartId": "bottom-tail",
+                    "partSlices": [
+                        _h_slice("top-tail", "T2-3B-top-tail", "flange_candidate"),
+                        _h_slice("web", "T2-3B-web", "web_candidate"),
+                        _h_slice("bottom-tail", "T2-3B-bottom-tail", "flange_candidate"),
+                    ],
+                }
+            )
+        for station in range(4500, 5000, 250):
+            assembly["metadata"]["hBeamSectionEvidence"]["stationFrames"].append(
+                {
+                    "station": station,
+                    "topFlangePartId": "top-short",
+                    "webPartId": "web",
+                    "bottomFlangePartId": "bottom",
+                    "partSlices": [
+                        _h_slice("top-short", "T2-3B-top-short", "flange_candidate"),
+                        _h_slice("web", "T2-3B-web", "web_candidate"),
+                        _h_slice("bottom", "T2-3B-bottom", "flange_candidate"),
+                    ],
+                }
+            )
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        roles = {plate.part_position: plate.primary_role.value for plate in segments[0].main_plates}
+        self.assertEqual("H_TOP_FLANGE_MAIN_PLATE", roles["T2-3B-top-tail"])
+        self.assertEqual("H_BOTTOM_FLANGE_MAIN_PLATE", roles["T2-3B-bottom-tail"])
+        self.assertNotIn("T2-3B-top-short", roles)
+        tail_plate = next(plate for plate in segments[0].main_plates if plate.part_position == "T2-3B-top-tail")
+        self.assertIn("h_beam_axis_continuity_expanded", tail_plate.secondary_evidence)
+        self.assertIn("H_GL_AXIS_CONTINUITY_EXPANDED", tail_plate.evidence_codes)
+    def test_native_h_continuity_updates_segment_range_for_expanded_plates(self):
+        assembly = _h_station_frame_fixture()
+        assembly["metadata"]["memberAxisEvidence"]["length"] = 6200
+        assembly["parts"].append(_part("top-tail", "T2-3B-top-tail", 4750, 6250, "Y", 0, 180, 240, 20, name="乱码"))
+        assembly["relationships"].append(_rel("top", "top-tail", "Contact"))
+        for station in range(5000, 6500, 250):
+            assembly["metadata"]["hBeamSectionEvidence"]["stationFrames"].append(
+                {
+                    "station": station,
+                    "topFlangePartId": "top-tail",
+                    "webPartId": "web",
+                    "bottomFlangePartId": "bottom",
+                    "partSlices": [
+                        _h_slice("top-tail", "T2-3B-top-tail", "flange_candidate"),
+                        _h_slice("web", "T2-3B-web", "web_candidate"),
+                        _h_slice("bottom", "T2-3B-bottom", "flange_candidate"),
+                    ],
+                }
+            )
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        self.assertEqual(6250, segments[0].station_end)
+
+    def test_native_h_continuity_expands_multiple_hops(self):
+        assembly = _h_station_frame_fixture()
+        assembly["metadata"]["memberAxisEvidence"]["length"] = 8200
+        assembly["parts"].extend(
+            [
+                _part("top-tail-1", "T2-3B-top-tail-1", 4750, 6200, "Y", 0, 180, 240, 20, name="乱码"),
+                _part("top-tail-2", "T2-3B-top-tail-2", 6200, 8200, "Y", 0, 180, 240, 20, name="乱码"),
+            ]
+        )
+        assembly["relationships"].extend([_rel("top", "top-tail-1", "Contact"), _rel("top-tail-1", "top-tail-2", "Contact")])
+        for station in range(5000, 6500, 250):
+            assembly["metadata"]["hBeamSectionEvidence"]["stationFrames"].append(
+                {
+                    "station": station,
+                    "topFlangePartId": "top-tail-1",
+                    "webPartId": "web",
+                    "bottomFlangePartId": "bottom",
+                    "partSlices": [_h_slice("top-tail-1", "T2-3B-top-tail-1", "flange_candidate")],
+                }
+            )
+        for station in range(6500, 8500, 250):
+            assembly["metadata"]["hBeamSectionEvidence"]["stationFrames"].append(
+                {
+                    "station": station,
+                    "topFlangePartId": "top-tail-2",
+                    "webPartId": "web",
+                    "bottomFlangePartId": "bottom",
+                    "partSlices": [_h_slice("top-tail-2", "T2-3B-top-tail-2", "flange_candidate")],
+                }
+            )
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        positions = _plate_positions(segments[0])
+        self.assertIn("T2-3B-top-tail-1", positions)
+        self.assertIn("T2-3B-top-tail-2", positions)
+
+    def test_native_h_continuity_allows_thickness_change_in_same_plate_chain(self):
+        assembly = _h_station_frame_fixture()
+        assembly["metadata"]["memberAxisEvidence"]["length"] = 6200
+        assembly["parts"].append(_part("top-tail", "T2-3B-top-tail", 4750, 6200, "Y", 0, 180, 240, 28, name="乱码"))
+        assembly["parts"][-1]["profileString"] = "PL28*240"
+        assembly["relationships"].append(_rel("top", "top-tail", "Contact"))
+        for station in range(5000, 6500, 250):
+            assembly["metadata"]["hBeamSectionEvidence"]["stationFrames"].append(
+                {
+                    "station": station,
+                    "topFlangePartId": "top-tail",
+                    "webPartId": "web",
+                    "bottomFlangePartId": "bottom",
+                    "partSlices": [_h_slice("top-tail", "T2-3B-top-tail", "flange_candidate")],
+                }
+            )
+
+        segments = classify_composite_main_material_segments(assembly)
+
+        roles = {plate.part_position: plate.primary_role.value for plate in segments[0].main_plates}
+        self.assertEqual("H_TOP_FLANGE_MAIN_PLATE", roles["T2-3B-top-tail"])
+    def test_adapter_parses_negative_zero_station_ranges(self):
+        groups = [
+            SimpleNamespace(
+                evidence_summary={"main_material_role": "BOTTOM_FLANGE"},
+                evidence_codes=["PROFILE_FAMILY_H_OR_GL"],
+                part_ids=["bottom-1", "bottom-2", "bottom-3"],
+                part_positions=["T3-P-4863", "T3-P-5555", "T3-P-4862"],
+                station_ranges="T3-P-4863:-0.0-1775.0;T3-P-5555:1775.0-11324.9;T3-P-4862:11324.8-13114.9",
+            )
+        ]
+
+        segments = classify_composite_main_material_segments(
+            {"assemblyId": "GL-NEG-ZERO", "metadata": {"memberAxisEvidence": {"length": 13114.9}}},
+            main_material_groups=groups,
+        )
+
+        self.assertEqual((0.0, 13114.9), (segments[0].station_start, segments[0].station_end))
     def test_closed_part_loops_do_not_force_cross_section_to_box(self):
         assembly = _composite_fixture()
         for station_loop in assembly["metadata"]["boxSectionEvidence"]["stationLoops"][:2]:
@@ -221,6 +392,7 @@ def _part(part_id, position, start, end, normal_axis, u, v, span_u, span_v, name
         "partId": part_id,
         "partPosition": position,
         "name": name,
+        "profileString": f"PL{span_v}*{span_u}" if span_u >= span_v else f"PL{span_u}",
         "mainMaterialEvidence": {
             "axisStationStart": start,
             "axisStationEnd": end,
@@ -247,6 +419,8 @@ def _h_gl_fixture():
             _rel("web", "bottom-1", "Weld"),
             _rel("web", "bottom-2", "Weld"),
             _rel("web", "bottom-3", "Weld"),
+            _rel("bottom-1", "bottom-2", "Contact"),
+            _rel("bottom-2", "bottom-3", "Contact"),
         ],
         "parts": [
             _part("top", "T3-P-4866", 0, 13114.9, "Y", 0, 150, 200, 14, name="上翼缘"),
@@ -259,12 +433,84 @@ def _h_gl_fixture():
     }
 
 
+def _h_station_frame_fixture():
+    frames = []
+    for station in range(0, 5000, 250):
+        slices = [
+            _h_slice("top", "T2-3B-top", "flange_candidate"),
+            _h_slice("web", "T2-3B-web", "web_candidate"),
+            _h_slice("bottom", "T2-3B-bottom", "flange_candidate"),
+        ]
+        if 1000 <= station <= 1500:
+            slices.append(_h_slice("local", "T2-3B-local", "flange_candidate"))
+        frames.append(
+            {
+                "station": station,
+                "topFlangePartId": "top",
+                "webPartId": "web",
+                "bottomFlangePartId": "bottom",
+                "partSlices": slices,
+            }
+        )
+    return {
+        "assemblyId": "H-NATIVE-1",
+        "metadata": {
+            "assemblyPosition": "T2-3GL-55",
+            "memberAxisEvidence": {"length": 4750},
+            "hBeamSectionEvidence": {
+                "source": "hBeamStationLocalSolidSection.v1",
+                "stationFrames": frames,
+            },
+        },
+        "relationships": [],
+        "parts": [
+            _part("top", "T2-3B-top", 0, 4750, "Y", 0, 180, 240, 20, name="乱码"),
+            _part("web", "T2-3B-web", 0, 4750, "X", 0, 0, 18, 360, name="乱码"),
+            _part("bottom", "T2-3B-bottom", 0, 4750, "Y", 0, -180, 240, 20, name="乱码"),
+            _part("local", "T2-3B-local", 1000, 1500, "Y", 0, 180, 240, 20, name="乱码"),
+        ],
+    }
+
+def _h_slice(part_id, position, role_hint):
+    return {
+        "partId": part_id,
+        "partPosition": position,
+        "roleHint": role_hint,
+        "segments": [
+            {"start": {"u": 0, "v": 0}, "end": {"u": 100, "v": 0}},
+            {"start": {"u": 100, "v": 0}, "end": {"u": 100, "v": 20}},
+            {"start": {"u": 100, "v": 20}, "end": {"u": 0, "v": 20}},
+            {"start": {"u": 0, "v": 20}, "end": {"u": 0, "v": 0}},
+        ],
+        "sectionLoops": [
+            {
+                "isClosed": True,
+                "isValid": True,
+                "points": [
+                    {"u": 0, "v": 0},
+                    {"u": 100, "v": 0},
+                    {"u": 100, "v": 20},
+                    {"u": 0, "v": 20},
+                ],
+            }
+        ],
+    }
+
 def _rel(part_a, part_b, edge_type):
     return {"partIdA": part_a, "partIdB": part_b, "edgeType": edge_type}
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+
+
+
+
+
+
 
 
 

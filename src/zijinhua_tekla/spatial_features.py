@@ -32,6 +32,7 @@ def appendage_cluster_features_from_bundle(
     assembly: dict[str, Any],
     member: dict[str, Any],
     body_part_ids: set[str] | None = None,
+    appendage_part_ids: set[str] | None = None,
 ) -> list[AppendageClusterFeatures]:
     parts = {text(part.get("partId")): part for part in assembly.get("parts", [])}
     body_ids = {text(part_id) for part_id in (body_part_ids or set()) if text(part_id)}
@@ -40,11 +41,17 @@ def appendage_cluster_features_from_bundle(
     if not body_ids and assembly.get("mainPartId"):
         body_ids = {text(assembly.get("mainPartId"))}
 
-    appendage_ids = set(parts) - body_ids
+    if appendage_part_ids is None:
+        appendage_ids = set(parts) - body_ids
+    else:
+        appendage_ids = {text(part_id) for part_id in appendage_part_ids if text(part_id)} & set(parts)
+        appendage_ids -= body_ids
     if not appendage_ids:
         return []
 
-    graph, root_edges, bolt_counts = _build_graph(assembly, body_ids, appendage_ids)
+    graph, root_edges, bolt_counts, internal_weld_counts, external_connection_counts = _build_graph(
+        assembly, body_ids, appendage_ids, parts
+    )
     clusters = _collect_appendage_clusters(appendage_ids, graph)
     body_box = _union_box([parts[part_id] for part_id in body_ids if part_id in parts])
     axis = _member_axis(member)
@@ -62,6 +69,8 @@ def appendage_cluster_features_from_bundle(
                 cluster_parts=cluster_parts,
                 root_edges=root_edges,
                 bolt_counts=bolt_counts,
+                internal_weld_counts=internal_weld_counts,
+                external_connection_counts=external_connection_counts,
                 body_box=body_box,
                 axis=axis,
                 assembly_span=assembly_span,
@@ -74,10 +83,13 @@ def classify_appendage_clusters_from_bundle(
     assembly: dict[str, Any],
     member: dict[str, Any],
     body_part_ids: set[str] | None = None,
+    appendage_part_ids: set[str] | None = None,
 ) -> list[AppendageRoleClassification]:
     return [
         classify_appendage_cluster(features)
-        for features in appendage_cluster_features_from_bundle(assembly, member, body_part_ids=body_part_ids)
+        for features in appendage_cluster_features_from_bundle(
+            assembly, member, body_part_ids=body_part_ids, appendage_part_ids=appendage_part_ids
+        )
     ]
 
 
@@ -85,10 +97,14 @@ def _build_graph(
     assembly: dict[str, Any],
     body_ids: set[str],
     appendage_ids: set[str],
-) -> tuple[dict[str, set[str]], dict[str, set[str]], dict[str, int]]:
+    parts: dict[str, dict[str, Any]],
+) -> tuple[dict[str, set[str]], dict[str, set[str]], dict[str, int], dict[str, int], dict[str, int]]:
     graph: dict[str, set[str]] = defaultdict(set)
     root_edges: dict[str, set[str]] = defaultdict(set)
     bolt_counts: dict[str, int] = defaultdict(int)
+    internal_weld_counts: dict[str, int] = defaultdict(int)
+    external_connection_counts: dict[str, int] = defaultdict(int)
+    all_part_ids = set(parts)
     for rel in assembly.get("relationships", []):
         left = text(rel.get("partIdA"))
         right = text(rel.get("partIdB"))
@@ -99,6 +115,9 @@ def _build_graph(
         if left in appendage_ids and right in appendage_ids and edge_type in {"Weld", "Contact", "Boolean"}:
             graph[left].add(right)
             graph[right].add(left)
+            if edge_type == "Weld":
+                internal_weld_counts[left] += 1
+                internal_weld_counts[right] += 1
 
         if left in appendage_ids and right in body_ids and edge_type in {"Weld", "Contact"}:
             root_edges[left].add(right)
@@ -110,8 +129,22 @@ def _build_graph(
                 bolt_counts[left] += 1
             if right in appendage_ids:
                 bolt_counts[right] += 1
+        if left in appendage_ids and right and right not in all_part_ids:
+            external_connection_counts[left] += 1
+        if right in appendage_ids and left and left not in all_part_ids:
+            external_connection_counts[right] += 1
 
-    return graph, root_edges, bolt_counts
+    for part_id in appendage_ids:
+        part = parts.get(part_id) or {}
+        for hole in part.get("boltHoles") or []:
+            left = text(hole.get("boltGroupPartIdA"))
+            right = text(hole.get("boltGroupPartIdB"))
+            if left == part_id and right and right not in all_part_ids:
+                external_connection_counts[part_id] += 1
+            elif right == part_id and left and left not in all_part_ids:
+                external_connection_counts[part_id] += 1
+
+    return graph, root_edges, bolt_counts, internal_weld_counts, external_connection_counts
 
 
 def _collect_appendage_clusters(appendage_ids: set[str], graph: dict[str, set[str]]) -> list[list[str]]:
@@ -142,6 +175,8 @@ def _cluster_to_features(
     cluster_parts: list[dict[str, Any]],
     root_edges: dict[str, set[str]],
     bolt_counts: dict[str, int],
+    internal_weld_counts: dict[str, int],
+    external_connection_counts: dict[str, int],
     body_box: dict[str, dict[str, float]],
     axis: tuple[float, float, float],
     assembly_span: float,
@@ -163,6 +198,8 @@ def _cluster_to_features(
         assembly_span=round(assembly_span, 4),
         centroid_outside_body=not _point_inside_box(centroid, body_box, margin=50.0),
         has_end_connection_signal=any(_part_near_body_axis_end(part, body_box, axis) for part in cluster_parts),
+        external_connection_count=sum(external_connection_counts.get(part_id, 0) for part_id in cluster_ids),
+        internal_weld_connection_count=sum(internal_weld_counts.get(part_id, 0) for part_id in cluster_ids) // 2,
         bolt_count=sum(bolt_counts.get(part_id, 0) for part_id in cluster_ids),
         cluster_volume=sum(as_float(part.get("volume"), 1.0) or 1.0 for part in cluster_parts),
         max_thickness=max((as_float(part.get("thickness")) for part in cluster_parts), default=0.0),

@@ -105,12 +105,15 @@ class AlgorithmInterfaceTests(unittest.TestCase):
     def test_bracket_classifier_uses_root_and_overhang_evidence(self):
         features = AppendageClusterFeatures(
             cluster_id="cluster-1",
+            part_ids=["10", "11", "12"],
             root_contact_ratio=0.25,
             cantilever_ratio=2.4,
             span_along_axis=180,
             assembly_span=1200,
             centroid_outside_body=True,
             has_end_connection_signal=False,
+            external_connection_count=1,
+            internal_weld_connection_count=2,
         )
 
         result = classify_appendage_cluster(features)
@@ -122,6 +125,26 @@ class AlgorithmInterfaceTests(unittest.TestCase):
         self.assertIn("AXIS_SPAN_LIMITED", result.evidence_codes)
         self.assertIn("EXTERNAL_CENTROID", result.evidence_codes)
         self.assertIn("NOT_END_CONNECTION", result.evidence_codes)
+
+    def test_bracket_classifier_classifies_single_external_plate_as_connection_plate(self):
+        features = AppendageClusterFeatures(
+            cluster_id="cluster-connection-plate",
+            part_ids=["10"],
+            root_contact_ratio=0.0,
+            cantilever_ratio=2.4,
+            span_along_axis=180,
+            assembly_span=1200,
+            centroid_outside_body=True,
+            has_end_connection_signal=False,
+            external_connection_count=1,
+            internal_weld_connection_count=0,
+        )
+
+        result = classify_appendage_cluster(features)
+
+        self.assertEqual("ConnectionPlate", result.role)
+        self.assertIn("EXTERNAL_CONNECTION", result.evidence_codes)
+        self.assertIn("SINGLE_PLATE_NO_INTERNAL_WELD", result.evidence_codes)
 
     def test_bracket_classifier_keeps_weak_evidence_unknown(self):
         features = AppendageClusterFeatures(
@@ -139,6 +162,25 @@ class AlgorithmInterfaceTests(unittest.TestCase):
 
         self.assertEqual("Unknown", result.role)
         self.assertLess(result.confidence, 0.5)
+
+    def test_bracket_classifier_requires_external_connection(self):
+        features = AppendageClusterFeatures(
+            cluster_id="cluster-no-external-connection",
+            part_ids=["10", "11", "12"],
+            root_contact_ratio=0.25,
+            cantilever_ratio=2.4,
+            span_along_axis=180,
+            assembly_span=1200,
+            centroid_outside_body=True,
+            has_end_connection_signal=False,
+            external_connection_count=0,
+            internal_weld_connection_count=2,
+        )
+
+        result = classify_appendage_cluster(features)
+
+        self.assertEqual("Unknown", result.role)
+        self.assertIn("EXTERNAL_CONNECTION", result.missing_codes)
 
     def test_bracket_classifier_rejects_end_connection_even_with_other_evidence(self):
         features = AppendageClusterFeatures(

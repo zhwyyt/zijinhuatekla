@@ -125,6 +125,13 @@ class OfflinePipelineTests(unittest.TestCase):
                                         },
                                         "volume": 36000.0,
                                         "obbDims": {"x": 120.0, "y": 100.0, "z": 20.0},
+                                        "mainMaterialEvidence": {
+                                            "axisStationStart": 80,
+                                            "axisStationEnd": 160,
+                                            "sectionProjectionEvidence": {
+                                                "projectedCentroid": {"u": 20, "v": 100},
+                                            },
+                                        },
                                     },
                                     {
                                         "partId": "11",
@@ -140,6 +147,19 @@ class OfflinePipelineTests(unittest.TestCase):
                                         },
                                         "volume": 414000.0,
                                         "obbDims": {"x": 230.0, "y": 90.0, "z": 16.0},
+                                        "boltHoles": [
+                                            {
+                                                "boltGroupPartIdA": "11",
+                                                "boltGroupPartIdB": "EXT-1",
+                                            }
+                                        ],
+                                        "mainMaterialEvidence": {
+                                            "axisStationStart": 80,
+                                            "axisStationEnd": 160,
+                                            "sectionProjectionEvidence": {
+                                                "projectedCentroid": {"u": 600, "v": 600},
+                                            },
+                                        },
                                     }
                                 ],
                                 "relationships": [
@@ -193,7 +213,8 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual("连接板", result.aligned_rows[0]["predicted_role"])
         self.assertTrue(result.quality_report.is_clean)
         self.assertEqual(1, len(result.spatial_classifications))
-        self.assertEqual("Bracket", result.spatial_classifications[0].role)
+        self.assertEqual("ConnectionPlate", result.spatial_classifications[0].role)
+        self.assertEqual(["11"], result.spatial_classifications[0].part_ids)
         relation_by_position = {row.part_position: row for row in result.box_part_spatial_relations}
         self.assertEqual("MAIN_WALL", relation_by_position["A-P-1"].relation_to_box_body)
         self.assertEqual("INSIDE_BODY", relation_by_position["A-BR-ROOT"].relation_to_box_body)
@@ -236,13 +257,16 @@ class OfflinePipelineTests(unittest.TestCase):
                                 "mainPartId": "top",
                                 "metadata": {"assemblyPosition": "A-GL-1"},
                                 "parts": [
-                                    _projected_part("top", "A-P-top", "上翼缘", -100, 100, 0, 14),
+                                    _projected_part("top", "A-P-top", "上翼缘", -100, 100, 0, 14, profile="PL14*200"),
                                     _projected_part("web", "A-P-web", "腹板", -6, 6, -500, 0),
-                                    _projected_part("bottom", "A-P-bottom", "下翼缘", -100, 100, -514, -500),
+                                    _projected_part("bottom", "A-P-bottom", "下翼缘", -100, 100, -514, -500, profile="PL14*200"),
                                     _projected_part("lift", "A-P-lift", "吊耳", -20, 20, 20, 90),
                                     _projected_part("left", "A-P-left", "加劲板", -90, -20, -430, -120),
                                 ],
-                                "relationships": [],
+                                "relationships": [
+                                    {"partIdA": "top", "partIdB": "web", "edgeType": "Contact"},
+                                    {"partIdA": "web", "partIdB": "bottom", "edgeType": "Contact"},
+                                ],
                             }
                         ]
                     },
@@ -299,12 +323,12 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def _projected_part(part_id, position, name, min_u, max_u, min_v, max_v):
+def _projected_part(part_id, position, name, min_u, max_u, min_v, max_v, profile="PL10"):
     return {
         "partId": part_id,
         "partPosition": position,
         "name": name,
-        "profileString": "PL10",
+        "profileString": profile,
         "length": 100,
         "thickness": 10,
         "centroid": {"x": 0.0, "y": 0.0, "z": 0.0},

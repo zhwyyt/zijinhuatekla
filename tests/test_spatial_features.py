@@ -28,6 +28,17 @@ def part(part_id, name, min_xyz, max_xyz, role_name="板"):
     }
 
 
+def part_with_bolt_to_external(part_id, name, min_xyz, max_xyz, external_part_id, role_name="板"):
+    item = part(part_id, name, min_xyz, max_xyz, role_name)
+    item["boltHoles"] = [
+        {
+            "boltGroupPartIdA": part_id,
+            "boltGroupPartIdB": external_part_id,
+        }
+    ]
+    return item
+
+
 class SpatialFeatureTests(unittest.TestCase):
     def test_body_part_ids_from_member_roles_uses_main_material_roles(self):
         member = {
@@ -105,7 +116,7 @@ class SpatialFeatureTests(unittest.TestCase):
             "mainPartId": 1,
             "parts": [
                 part(1, "A1-BODY", (0, 0, 0), (1000, 100, 100), "主体板"),
-                part(10, "A1-BR-ROOT", (400, 100, 30), (430, 130, 70), "牛腿根部板"),
+                part_with_bolt_to_external(10, "A1-BR-ROOT", (400, 100, 30), (430, 130, 70), "EXT-1", "牛腿根部板"),
                 part(11, "A1-BR-RIB1", (430, 130, 30), (520, 360, 50), "牛腿肋板"),
                 part(12, "A1-BR-RIB2", (430, 130, 50), (520, 360, 70), "牛腿肋板"),
             ],
@@ -126,6 +137,29 @@ class SpatialFeatureTests(unittest.TestCase):
         self.assertEqual("Bracket", classifications[0].role)
         self.assertEqual(["10", "11", "12"], classifications[0].part_ids)
         self.assertIn("OVERHANG_DOMINANT", classifications[0].evidence_codes)
+
+    def test_single_plate_with_external_connection_is_connection_plate_not_bracket(self):
+        assembly = {
+            "assemblyId": "A1",
+            "mainPartId": 1,
+            "parts": [
+                part(1, "A1-BODY", (0, 0, 0), (1000, 100, 100), "主体板"),
+                part_with_bolt_to_external(10, "A1-CONN", (400, 100, 30), (430, 360, 70), "EXT-1", "连接板"),
+            ],
+            "relationships": [
+                {"partIdA": 1, "partIdB": 10, "edgeType": "Contact"},
+            ],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}, "Length": 1000}],
+            "Classification": {"PartRoles": [{"PartId": "1", "Role": "wall_candidate"}]},
+        }
+
+        classifications = classify_appendage_clusters_from_bundle(assembly, member)
+
+        self.assertEqual(1, len(classifications))
+        self.assertEqual("ConnectionPlate", classifications[0].role)
+        self.assertEqual(["10"], classifications[0].part_ids)
 
 
 if __name__ == "__main__":

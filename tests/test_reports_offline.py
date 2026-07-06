@@ -146,7 +146,7 @@ class OfflineReportTests(unittest.TestCase):
                     }
                 ]
             },
-            assembly={"assemblyId": "100", "mainPartId": "1", "parts": [{"partId": "1"}], "relationships": []},
+            assembly={"assemblyId": "100", "mainPartId": "501", "parts": [{"partId": "501", "partPosition": "A-FLANGE-1", "name": "BEAM", "profileString": "PL10*200"}], "relationships": []},
             aligned_rows=aligned,
             quality_report=quality_report_from_aligned_rows(aligned),
             box_main_material_segment_groups=[
@@ -169,16 +169,16 @@ class OfflineReportTests(unittest.TestCase):
                     segment_id="S1",
                     station_start=0,
                     station_end=3000,
-                    segment_type=CompositeSegmentType.CROSS_CORE_WITH_FLANGES,
+                    segment_type=CompositeSegmentType.H_OR_BH_SECTION,
                     confidence=0.88,
                     evidence_codes=["STATION_REGIME_SEGMENT"],
                     main_plates=[
                         CompositeMainPlate(
                             part_id="501",
                             part_position="A-FLANGE-1",
-                            primary_role=CompositePrimaryRole.CROSS_FLANGE_MAIN_PLATE,
+                            primary_role=CompositePrimaryRole.H_FLANGE_MAIN_PLATE,
                             secondary_evidence=["parallel_to_cross_core_plate"],
-                            evidence_codes=["CROSS_FLANGE_OUTER_PLATE"],
+                            evidence_codes=["H_GL_STATION_FRAME_NATIVE_COMPOSITE"],
                         )
                     ],
                 ),
@@ -355,9 +355,9 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual("FACE_A", box_segment_rows[0]["face_id"] )
         self.assertEqual(["401", "402"], list(box_segment_csv_rows["part_id"].astype(str)))
         self.assertEqual(["CONTINUOUS", "CONTINUOUS"], list(box_segment_csv_rows["continuity_level"] ))
-        self.assertEqual("CROSS_CORE_WITH_FLANGES", composite_rows[0]["segment_type"])
+        self.assertEqual("H_OR_BH_SECTION", composite_rows[0]["segment_type"])
         self.assertEqual("A-FLANGE-1", composite_rows[0]["main_plates"][0]["part_position"])
-        self.assertEqual("CROSS_FLANGE_MAIN_PLATE", composite_csv_rows.iloc[0]["primary_role"])
+        self.assertEqual("H_FLANGE_MAIN_PLATE", composite_csv_rows.iloc[0]["primary_role"])
         self.assertEqual(2, len(composite_csv_rows))
         self.assertEqual("S2", composite_csv_rows.iloc[1]["segment_id"])
         self.assertEqual("MIXED_OR_INSUFFICIENT_EVIDENCE", composite_csv_rows.iloc[1]["segment_type"])
@@ -366,7 +366,7 @@ class OfflineReportTests(unittest.TestCase):
             "STATION_REGIME_SEGMENT;INSUFFICIENT_MAIN_PLATE_EVIDENCE",
             composite_csv_rows.iloc[1]["segment_evidence_codes"],
         )
-        self.assertEqual("CROSS_FLANGE_OUTER_PLATE", composite_csv_rows.iloc[0]["plate_evidence_codes"])
+        self.assertEqual("H_GL_STATION_FRAME_NATIVE_COMPOSITE", composite_csv_rows.iloc[0]["plate_evidence_codes"])
         self.assertIn(paths.composite_main_material_segments_path, paths.as_tuple())
         self.assertIn(paths.composite_main_material_segments_csv_path, paths.as_tuple())
         self.assertEqual("MAIN_WALL", box_relation_rows[0]["relation_to_box_body"])
@@ -406,6 +406,9 @@ class OfflineReportTests(unittest.TestCase):
         self.assertIn("BOX Main Material Segment Groups JSON", markdown)
         self.assertIn("BOX Main Material Segment Groups CSV", markdown)
         self.assertIn("composite-main-material-segments.json", markdown)
+        self.assertIn("## H/GL 型材主体与主材", markdown)
+        self.assertIn("主零件：`501 / A-FLANGE-1 / BEAM / PL10*200`", markdown)
+        self.assertIn("`A-FLANGE-1`：`H_FLANGE_MAIN_PLATE`", markdown)
         self.assertIn("## BOX 内外关系", markdown)
         self.assertIn("`MAIN_WALL`=1", markdown)
         self.assertIn("`INSIDE_BODY`=1", markdown)
@@ -423,5 +426,8 @@ class OfflineReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
 
 

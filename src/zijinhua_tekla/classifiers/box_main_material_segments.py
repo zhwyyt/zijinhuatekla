@@ -8,7 +8,7 @@ from shapely.geometry import LineString, Polygon
 from shapely.ops import polygonize, unary_union
 
 from ..box_section import classify_box_section_evidence
-from ..rules import as_float, text
+from ..rules import as_float, parse_pl, text
 
 
 class SegmentContinuityLevel(str, Enum):
@@ -753,25 +753,22 @@ def _classify_h_or_gl_main_material_groups(assembly: dict[str, Any], family: str
     slice_groups = _h_gl_station_slice_main_plate_groups(assembly_id, assembly, relationship_edges, family)
     if slice_groups:
         return slice_groups
-    role_parts: dict[str, list[dict[str, Any]]] = {"TOP_FLANGE": [], "WEB": [], "BOTTOM_FLANGE": []}
-    for part in assembly.get("parts", []):
-        role = _h_or_gl_part_role(part)
-        if not role:
-            continue
-        role_parts[role].append(part)
+    role_parts = _h_gl_role_parts_from_geometry(assembly, relationship_edges)
 
     groups: list[BoxMainMaterialSegmentGroup] = []
     for role in ["TOP_FLANGE", "WEB", "BOTTOM_FLANGE"]:
-        parts = sorted(role_parts[role], key=lambda item: (_station_start(item), _station_end(item), text(item.get("partPosition"))))
+        parts = sorted(role_parts.get(role, []), key=lambda item: (_station_start(item), _station_end(item), text(item.get("partPosition"))))
         if not parts:
             continue
         group = _group_from_parts(assembly_id, parts, relationship_edges, 0)
         evidence_summary = dict(group.evidence_summary)
         evidence_summary["main_material_role"] = role
         evidence_summary["profile_family"] = family
+        evidence_summary["main_material_source"] = "h_gl_geometry_station_relationship_chain"
         evidence_codes = list(group.evidence_codes)
         evidence_codes.append("PROFILE_FAMILY_H_OR_GL")
         evidence_codes.append(f"ROLE_{role}")
+        evidence_codes.append("H_GL_GEOMETRY_STATION_RELATION_CHAIN")
         groups.append(
             BoxMainMaterialSegmentGroup(
                 assembly_id=group.assembly_id,
@@ -791,6 +788,173 @@ def _classify_h_or_gl_main_material_groups(assembly: dict[str, Any], family: str
     return groups
 
 
+def _h_gl_role_parts_from_geometry(
+    assembly: dict[str, Any],
+    relationship_edges: set[tuple[str, str]],
+) -> dict[str, list[dict[str, Any]]]:
+    role_parts: dict[str, list[dict[str, Any]]] = {"TOP_FLANGE": [], "WEB": [], "BOTTOM_FLANGE": []}
+    body_parts = [part for part in assembly.get("parts", []) if _is_h_gl_body_plate(part)]
+    if not body_parts or not relationship_edges:
+        return role_parts
+    axis_length = as_float(assembly.get("metadata", {}).get("memberAxisEvidence", {}).get("length"))
+    if axis_length <= 0:
+        axis_length = max((_station_end(part) for part in body_parts), default=0.0) - min((_station_start(part) for part in body_parts), default=0.0)
+    long_parts = [part for part in body_parts if _h_gl_axis_coverage(part, axis_length) >= 0.75]
+    web_parts = [part for part in long_parts if _h_gl_plate_width(part) is None]
+    if not web_parts:
+        web_parts = [part for part in long_parts if not _h_gl_has_plate_width(part)]
+    if not web_parts:
+        return role_parts
+    chosen: tuple[dict[str, Any], list[list[dict[str, Any]]], list[dict[str, Any]], list[dict[str, Any]]] | None = None
+    for web_part in sorted(web_parts, key=lambda part: (-_h_gl_axis_length(part), text(part.get("partPosition")))):
+        web_ids = {text(web_part.get("partId"))}
+        flange_candidates = [part for part in body_parts if text(part.get("partId")) not in web_ids and _h_gl_has_plate_width(part)]
+        chains = [chain for chain in _h_gl_flange_chains(flange_candidates, relationship_edges) if _h_gl_chain_connected_to_any(chain, [web_part], relationship_edges)]
+        chains = [chain for chain in chains if _h_gl_axis_coverage_for_chain(chain, axis_length) >= 0.45]
+        if len(chains) < 2:
+            continue
+        top_chain, bottom_chain = _h_gl_assign_flange_sides(chains)
+        if top_chain and bottom_chain:
+            chosen = (web_part, chains, top_chain, bottom_chain)
+            break
+    if chosen is None:
+        return role_parts
+    web_part, _chains, top_chain, bottom_chain = chosen
+    role_parts["WEB"] = [web_part]
+    role_parts["TOP_FLANGE"] = top_chain
+    role_parts["BOTTOM_FLANGE"] = bottom_chain
+    return role_parts
+
+
+def _is_h_gl_body_plate(part: dict[str, Any]) -> bool:
+    evidence = part.get("mainMaterialEvidence", {})
+    if evidence.get("isBodyWallPlateCandidate") is not True:
+        return False
+    if _h_gl_axis_length(part) < 1000.0:
+        return False
+    profile = text(part.get("profileString") or part.get("profile")).upper()
+    return profile.startswith("PL")
+
+
+def _h_gl_axis_coverage(part: dict[str, Any], axis_length: float) -> float:
+    if axis_length <= 0:
+        return 0.0
+    return _h_gl_axis_length(part) / axis_length
+
+
+def _h_gl_axis_coverage_for_chain(chain: list[dict[str, Any]], axis_length: float) -> float:
+    if axis_length <= 0 or not chain:
+        return 0.0
+    return (max(_station_end(part) for part in chain) - min(_station_start(part) for part in chain)) / axis_length
+
+
+def _h_gl_axis_length(part: dict[str, Any]) -> float:
+    evidence = part.get("mainMaterialEvidence", {})
+    length = as_float(evidence.get("axisStationLength"))
+    if length > 0:
+        return length
+    return max(0.0, _station_end(part) - _station_start(part))
+
+
+def _h_gl_has_plate_width(part: dict[str, Any]) -> bool:
+    return _h_gl_plate_width(part) is not None
+
+
+def _h_gl_plate_width(part: dict[str, Any]) -> float | None:
+    parsed = parse_pl(part.get("profileString") or part.get("profile"))
+    if parsed is None:
+        return None
+    return parsed[1]
+
+
+def _h_gl_flange_chains(
+    parts: list[dict[str, Any]],
+    relationship_edges: set[tuple[str, str]],
+) -> list[list[dict[str, Any]]]:
+    ordered = sorted(parts, key=lambda part: (_h_gl_side_key(part), _station_start(part), _station_end(part), text(part.get("partPosition"))))
+    chains: list[list[dict[str, Any]]] = []
+    for part in ordered:
+        appended = False
+        for chain in chains:
+            if _h_gl_same_chain(chain[-1], part, relationship_edges):
+                chain.append(part)
+                appended = True
+                break
+        if not appended:
+            chains.append([part])
+    return chains
+
+
+def _h_gl_same_chain(left: dict[str, Any], right: dict[str, Any], relationship_edges: set[tuple[str, str]]) -> bool:
+    if not _h_gl_same_section_side(left, right):
+        return False
+    if not _has_relationship(left, right, relationship_edges):
+        return False
+    return _h_gl_end_to_start_connected(left, right)
+
+
+def _h_gl_same_section_side(left: dict[str, Any], right: dict[str, Any]) -> bool:
+    left_face = text(left.get("mainMaterialEvidence", {}).get("bodyFaceId"))
+    right_face = text(right.get("mainMaterialEvidence", {}).get("bodyFaceId"))
+    if left_face and left_face == right_face:
+        return True
+    left_projection = _h_gl_projected_side_value(left)
+    right_projection = _h_gl_projected_side_value(right)
+    if left_projection is not None and right_projection is not None:
+        return abs(left_projection - right_projection) <= 25.0
+    return False
+
+
+def _h_gl_side_key(part: dict[str, Any]) -> tuple[str, float]:
+    projected = _h_gl_projected_side_value(part)
+    if projected is not None:
+        return ("projection", round(projected / 25.0) * 25.0)
+    return ("face", 0.0 if not text(part.get("mainMaterialEvidence", {}).get("bodyFaceId")) else float(abs(hash(text(part.get("mainMaterialEvidence", {}).get("bodyFaceId")))) % 1000000))
+
+
+def _h_gl_projected_side_value(part: dict[str, Any]) -> float | None:
+    projection = part.get("mainMaterialEvidence", {}).get("sectionProjectionEvidence", {})
+    centroid = projection.get("projectedCentroid", {}) if isinstance(projection, dict) else {}
+    if not isinstance(centroid, dict):
+        return None
+    u = as_float(centroid.get("u"))
+    v = as_float(centroid.get("v"))
+    normal = projection.get("normalProjection", {})
+    normal_u = abs(as_float(normal.get("u"))) if isinstance(normal, dict) else 0.0
+    normal_v = abs(as_float(normal.get("v"))) if isinstance(normal, dict) else 0.0
+    return v if normal_v >= normal_u else u
+
+
+def _h_gl_assign_flange_sides(chains: list[list[dict[str, Any]]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    projected = [(chain, _h_gl_chain_projected_side_value(chain)) for chain in chains]
+    if all(value is not None for _chain, value in projected):
+        ordered = sorted(projected, key=lambda item: (item[1], _station_start(item[0][0])))
+        return ordered[-1][0], ordered[0][0]
+    full = [chain for chain in chains if len(chain) == 1]
+    segmented = [chain for chain in chains if len(chain) > 1]
+    if len(full) == 1 and len(segmented) == 1:
+        return full[0], segmented[0]
+    return [], []
+
+
+def _h_gl_chain_projected_side_value(chain: list[dict[str, Any]]) -> float | None:
+    values = [_h_gl_projected_side_value(part) for part in chain]
+    values = [value for value in values if value is not None]
+    if not values:
+        return None
+    return sum(values) / len(values)
+
+
+def _h_gl_end_to_start_connected(left: dict[str, Any], right: dict[str, Any], tolerance: float = 150.0) -> bool:
+    return abs(_station_end(left) - _station_start(right)) <= tolerance or abs(_station_end(right) - _station_start(left)) <= tolerance
+
+
+def _h_gl_chain_connected_to_any(
+    chain: list[dict[str, Any]],
+    targets: list[dict[str, Any]],
+    relationship_edges: set[tuple[str, str]],
+) -> bool:
+    return any(_has_relationship(part, target, relationship_edges) for part in chain for target in targets)
 def _h_gl_station_slice_main_plate_groups(
     assembly_id: str,
     assembly: dict[str, Any],
@@ -898,16 +1062,6 @@ def _h_gl_slice_role(role_hints: set[str]) -> str:
     if "flange_candidate" in role_hints and "web_candidate" not in role_hints:
         return "FLANGE"
     return "MAIN_PLATE"
-
-def _h_or_gl_part_role(part: dict[str, Any]) -> str:
-    name = text(part.get("name"))
-    if "上翼缘" in name:
-        return "TOP_FLANGE"
-    if "下翼缘" in name:
-        return "BOTTOM_FLANGE"
-    if "腹板" in name:
-        return "WEB"
-    return ""
 
 def _role_continuity(parts: list[dict[str, Any]]) -> SegmentContinuityLevel:
     if len(parts) == 1:
@@ -1067,5 +1221,6 @@ def _unique_values(values: Any) -> list[str]:
         if item and item not in result:
             result.append(item)
     return result
+
 
 

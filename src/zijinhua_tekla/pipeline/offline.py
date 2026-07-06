@@ -78,8 +78,15 @@ def run_offline_analysis(
     composite_main_material_segments = classify_composite_main_material_segments(
         assembly, member, main_material_groups=main_material_groups
     )
+    initial_box_part_spatial_relations = classify_box_part_spatial_relations(
+        assembly, member, main_material_groups
+    )
+    outside_box_part_ids = _outside_box_part_ids(initial_box_part_spatial_relations)
     spatial_classifications = classify_appendage_clusters_from_bundle(
-        assembly, member, body_part_ids=_main_wall_part_ids(main_material_groups)
+        assembly,
+        member,
+        body_part_ids=_main_wall_part_ids(main_material_groups),
+        appendage_part_ids=outside_box_part_ids,
     )
     outside_part_ids = _outside_part_ids(spatial_classifications)
     return OfflinePipelineResult(
@@ -117,6 +124,14 @@ def _outside_part_ids(spatial_classifications: list[Any]) -> set[str]:
             continue
         result.update(text(part_id) for part_id in getattr(item, "part_ids", []) if text(part_id))
     return result
+
+
+def _outside_box_part_ids(relations: list[BoxPartSpatialRelation]) -> set[str]:
+    return {
+        text(item.part_id)
+        for item in relations
+        if item.relation_to_box_body == "OUTSIDE_ATTACHMENT" and text(item.part_id)
+    }
 def _predict(row: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
     role_result = classify_part(row, summary)
     return {

@@ -41,6 +41,7 @@ class ClassifiersFacadeTests(unittest.TestCase):
                 assembly_span=1000,
                 centroid_outside_body=True,
                 has_end_connection_signal=False,
+                external_connection_count=1,
             )
         )
 

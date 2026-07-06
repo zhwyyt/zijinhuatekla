@@ -104,7 +104,11 @@
 
 2026-06-27：组合截面主材识别已完成 fresh Tekla 当前选择集验证；新导出 `I:\zijinhuatekla\cache\20260627_083740` 中 `T2-3GKZ-12` 切为 6 个轴向区段，输出 `CROSS_FLANGE_MAIN_PLATE=56`、`BOX_MAIN_WALL_PLATE=30`、`CROSS_CORE_MAIN_PLATE=23`；验证记录见 `docs/verification/2026-06-27-composite-main-material-segments.md`。
 
-2026-06-27：H/BH/GL 主材分段已适配进入 composite 统一角色输出；offline pipeline 复用既有 `main_material_groups`，输出 `H_OR_BH_SECTION` 以及 `H_TOP_FLANGE_MAIN_PLATE/H_WEB_MAIN_PLATE/H_BOTTOM_FLANGE_MAIN_PLATE/H_FLANGE_MAIN_PLATE`，不改变现有 H/GL 识别核心。
+2026-06-29：H/BH/GL 主材分段已从 adapter 过渡为 composite native station frame 优先口径；`classify_composite_main_material_segments` 先消费 `metadata.hBeamSectionEvidence.stationFrames[].partSlices`，输出 `H_OR_BH_SECTION` 以及 `H_TOP_FLANGE_MAIN_PLATE/H_WEB_MAIN_PLATE/H_BOTTOM_FLANGE_MAIN_PLATE/H_FLANGE_MAIN_PLATE`，只有缺少 native frame 证据时才回退复用既有 `main_material_groups`。
+
+2026-06-29：H/GL native composite 已迁入 station frame 主路径，但随后复核确认原先按 profile/name-like 连续扩展会误吸局部/端部板，`T2-3GL-55` 不能输出 5 块主板；正确口径必须改为收尾相连 + 同截面侧 + Weld/Contact 关系三条件，中文 `name` 仅可显示解释，不可作为识别判据。验证记录见 `docs/verification/2026-06-27-composite-main-material-segments.md`。
+
+2026-06-30：H/GL 主板链算法已按三条件收敛：收尾相连、同截面侧、直接 Weld/Contact。native station frame 先取强种子，再从全 parts 池按三条件补齐未被切片命中的端部主板；同 `bodyFaceId` 优先作为同侧证据，允许板厚变化导致的投影中心偏移，但不允许仅按 name/profile 扩展。fresh Tekla 当前选择集重新导出 `I:\zijinhuatekla\cache\20260630_081919`，`T3-6GL-110` 输出 `T3-P-4866` 上翼缘、`T3-P-4753` 腹板、`T3-P-4863/T3-P-5555/T3-P-4862` 下翼缘；`T2-3GL-55` 回归输出 3 块主板 `T2-3B-526/T2-3B-508/T2-3B-797`，不再误吸 `T2-3B-540/T2-3B-502`。
 
 ## 已确认业务口径
 
@@ -230,6 +234,9 @@
 - BOX 内外关系层后单元测试：`python -m unittest discover -s tests`，70 tests OK。存在 `openpyxl` 的 `datetime.utcnow()` DeprecationWarning，不影响当前测试结果。
 - BOX 内外关系层 T3 smoke：`python -m zijinhua_tekla.cli analyze --root I:\xingcaisuanfa\cache\20260623_144836 --truth-root I:\xingcaisuanfa\cache\20260615_161938 --member-id T3-5GKZ-10 --out outputs\box-part-spatial-relations-smoke-20260623-v3`；新增 `box-part-spatial-relations.json/csv`，分布 `INSIDE_BODY=228`、`MAIN_WALL=16`、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`。
 - T3 空间诊断：附属件簇 `15`，`Bracket=2`，`Unknown=13`。
+
+
+
 
 
 

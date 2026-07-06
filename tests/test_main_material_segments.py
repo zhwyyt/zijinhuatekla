@@ -16,6 +16,8 @@ class MainMaterialSegmentTests(unittest.TestCase):
                 _rel("web", "bottom-1", "Weld"),
                 _rel("web", "bottom-2", "Weld"),
                 _rel("web", "bottom-3", "Weld"),
+                _rel("bottom-1", "bottom-2", "Contact"),
+                _rel("bottom-2", "bottom-3", "Contact"),
                 _rel("web", "stiffener", "Weld"),
             ],
             "parts": [
@@ -39,6 +41,37 @@ class MainMaterialSegmentTests(unittest.TestCase):
         self.assertIn("PROFILE_FAMILY_H_OR_GL", by_role["BOTTOM_FLANGE"].evidence_codes)
         self.assertNotIn("T3-P-4653", ";".join(part for group in groups for part in group.part_positions))
 
+    def test_classifies_h_gl_chains_without_name_semantics(self):
+        assembly = {
+            "assemblyId": "GL-1",
+            "metadata": {"assemblyPosition": "T3-6GL-110", "memberAxisEvidence": {"length": 13114.9}},
+            "relationships": [
+                _rel("top", "web", "Contact"),
+                _rel("web", "bottom-1", "Weld"),
+                _rel("web", "bottom-2", "Weld"),
+                _rel("web", "bottom-3", "Weld"),
+                _rel("bottom-1", "bottom-2", "Contact"),
+                _rel("bottom-2", "bottom-3", "Contact"),
+                _rel("web", "stiffener", "Weld"),
+            ],
+            "parts": [
+                _part("top", "T3-P-4866", "UNKNOWN", "PL14.0*200.0", "RADIAL_Y_NEG", 0, 13114.9),
+                _part("web", "T3-P-4753", "UNKNOWN", "PL12.0", "RADIAL_Z_NEG", 0, 13114.9),
+                _part("bottom-1", "T3-P-4863", "UNKNOWN", "PL14*200", "RADIAL_Z_NEG", 0, 1775.0),
+                _part("bottom-2", "T3-P-5555", "UNKNOWN", "PL22.0*200.0", "RADIAL_Z_NEG", 1775.0, 11324.9),
+                _part("bottom-3", "T3-P-4862", "UNKNOWN", "PL14*200", "RADIAL_Z_NEG", 11324.8, 13114.9),
+                _part("stiffener", "T3-P-4653", "UNKNOWN", "PL12.0", "RADIAL_Z_NEG", 1966.6, 1978.6),
+            ],
+        }
+
+        groups = classify_main_material_segment_groups(assembly)
+
+        by_role = {group.evidence_summary["main_material_role"]: group for group in groups}
+        self.assertEqual(["T3-P-4866"], by_role["TOP_FLANGE"].part_positions)
+        self.assertEqual(["T3-P-4753"], by_role["WEB"].part_positions)
+        self.assertEqual(["T3-P-4863", "T3-P-5555", "T3-P-4862"], by_role["BOTTOM_FLANGE"].part_positions)
+        self.assertEqual(SegmentContinuityLevel.CONTINUOUS, by_role["BOTTOM_FLANGE"].continuity_level)
+        self.assertNotIn("T3-P-4653", ";".join(part for group in groups for part in group.part_positions))
     def test_falls_back_to_box_strategy_for_box_member(self):
         assembly = {
             "assemblyId": "BOX-1",
@@ -184,5 +217,6 @@ def _rel(part_a, part_b, edge_type):
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
