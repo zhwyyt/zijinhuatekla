@@ -20,6 +20,13 @@ obj/
 # Local Tekla/Excel working files
 *.xls
 *.xlsx
+*.dwg
+*.dxf
+*.bak
+*.zip
+
+# Local process-drawing reference notes
+/给Codex的工序图技术指导*.md
 
 # Editor and OS noise
 .DS_Store

@@ -92,7 +92,18 @@ class OfflineReportTests(unittest.TestCase):
             },
         ]
         result = OfflinePipelineResult(
-            member={"Classification": {"KeyDimensionsDisplay": "BH400*200*7*10", "Confidence": 0.92}},
+            member={
+                "Classification": {"KeyDimensionsDisplay": "BH400*200*7*10", "Confidence": 0.92},
+                "Parts": [
+                    {
+                        "PartId": "401",
+                        "SolidEdges": [
+                            {"Start": {"X": 10.0, "Y": 0.0, "Z": 0.0}, "End": {"X": 20.0, "Y": 0.0, "Z": 100.0}},
+                            {"Start": {"X": 20.0, "Y": 0.0, "Z": 100.0}, "End": {"X": 30.0, "Y": 0.0, "Z": 100.0}},
+                        ],
+                    }
+                ],
+            },
             bundle={
                 "assemblies": [
                     {
@@ -152,7 +163,21 @@ class OfflineReportTests(unittest.TestCase):
                     }
                 ]
             },
-            assembly={"assemblyId": "100", "mainPartId": "501", "parts": [{"partId": "501", "partPosition": "A-FLANGE-1", "name": "BEAM", "profileString": "PL10*200"}], "relationships": []},
+            assembly={
+                "assemblyId": "100",
+                "mainPartId": "501",
+                "parts": [
+                    {"partId": "501", "partPosition": "A-FLANGE-1", "name": "BEAM", "profileString": "PL10*200"},
+                    {
+                        "partId": "401",
+                        "partPosition": "A-P-401",
+                        "name": "COLUMN",
+                        "profileString": "PL16*900",
+                        "mainMaterialEvidence": {"axisStationStart": 0.0, "axisStationEnd": 3000.0, "bodyFaceId": "FACE_A"},
+                    },
+                ],
+                "relationships": [],
+            },
             aligned_rows=aligned,
             quality_report=quality_report_from_aligned_rows(aligned),
             box_main_material_segment_groups=[
@@ -426,13 +451,25 @@ class OfflineReportTests(unittest.TestCase):
         self.assertEqual(["401", "10"], list(box_relation_csv_rows["part_id"].astype(str)))
         self.assertEqual(["MAIN_WALL", "INSIDE_BODY"], list(box_relation_csv_rows["relation_to_box_body"]))
         self.assertEqual("boxAssemblyDrawingSteps.v1", drawing_step_rows["source"])
+        drawing_parts_by_id = {str(part["partId"]): part for part in drawing_step_rows["parts"]}
+        self.assertEqual(
+            [
+                {"start": {"x": 10.0, "y": 0.0}, "end": {"x": 20.0, "y": 100.0}},
+                {"start": {"x": 20.0, "y": 100.0}, "end": {"x": 30.0, "y": 100.0}},
+            ],
+            drawing_parts_by_id["401"]["projectionEdges"],
+        )
         self.assertEqual("BASE_MAIN_WALL", drawing_step_rows["steps"][0]["step_type"])
         self.assertEqual(["BASE_MAIN_WALL"], list(drawing_step_csv_rows["step_type"]))
         self.assertIn("# A-GKZ-1 BOX 渐进式构件图步骤", drawing_step_md)
         self.assertIn("BASE_MAIN_WALL", drawing_step_md)
-        self.assertIn("A-GKZ-1 BOX progressive drawing steps", drawing_step_dxf)
+        self.assertIn("A-GKZ-1 BOX 工序图", drawing_step_dxf)
+        self.assertIn("Z-DIMENSIONS", drawing_step_dxf)
+        self.assertIn("PartMark", drawing_step_dxf)
+        self.assertIn("CONTINUOUS HEIGHT CHAIN", drawing_step_dxf)
+        self.assertIn("BOM STEP 1 CUMULATIVE PARTS 1", drawing_step_dxf)
         self.assertIn("A-P-401", drawing_step_dxf)
-        self.assertIn("station_range", drawing_step_dxf)
+        self.assertIn("基准主板 station 范围", drawing_step_dxf)
         self.assertEqual("CLOSED_WITH_CAVITY", box_topology_rows[0]["topology_status"])
         self.assertEqual(["CLOSED_WITH_CAVITY"], list(box_topology_csv_rows["topology_status"]))
         self.assertEqual(["BODY_CORE"], list(box_topology_csv_rows["station_scope"]))

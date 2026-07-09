@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -190,6 +191,8 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         "assembly_id": result.assembly.get("assemblyId", ""),
         "member_id": member_id,
         "source": "boxAssemblyDrawingSteps.v1",
+        "parts": _drawing_part_snapshots(result.assembly, result.member),
+        "segments": _drawing_axis_segments(result.member),
         "steps": [item.to_dict() for item in result.box_assembly_drawing_steps],
     }
     box_assembly_drawing_steps_path.write_text(
@@ -392,6 +395,188 @@ def _flatten_box_part_spatial_relations(rows: list[dict[str, object]]) -> list[d
         }
         for row in rows
     ]
+
+
+def _drawing_part_snapshots(assembly: dict[str, object], member: dict[str, object] | None = None) -> list[dict[str, object]]:
+    snapshots = []
+    member_parts_by_id = _member_parts_by_id(member or {})
+    for raw_part in assembly.get("parts", []):
+        if not isinstance(raw_part, dict):
+            continue
+        geometry_part = member_parts_by_id.get(str(raw_part.get("partId") or raw_part.get("PartId") or "")) or raw_part
+        evidence = raw_part.get("mainMaterialEvidence", {})
+        if not isinstance(evidence, dict):
+            evidence = {}
+        bolt_holes = raw_part.get("boltHoles", [])
+        if not isinstance(bolt_holes, list):
+            bolt_holes = []
+        first_bolt = bolt_holes[0] if bolt_holes and isinstance(bolt_holes[0], dict) else {}
+        snapshot = {
+            "partId": raw_part.get("partId", ""),
+            "partPosition": raw_part.get("partPosition", ""),
+            "profileString": raw_part.get("profileString") or raw_part.get("profile", ""),
+            "name": raw_part.get("name", ""),
+            "material": raw_part.get("material", ""),
+            "axisStationStart": evidence.get("axisStationStart", ""),
+            "axisStationEnd": evidence.get("axisStationEnd", ""),
+            "face": evidence.get("bodyFaceId", ""),
+            "requiresDetail": _requires_drawing_detail(raw_part, evidence),
+            "boltHoleCount": raw_part.get("boltHoleCount", 0),
+            "boltDiameter": first_bolt.get("diameter", ""),
+            "weldDetails": raw_part.get("weldDetails", []),
+        }
+        projection_edges = _drawing_projection_edges(geometry_part)
+        if projection_edges:
+            snapshot["projectionEdges"] = projection_edges
+        projection_arcs = _drawing_projection_arcs(geometry_part)
+        if projection_arcs:
+            snapshot["projectionArcs"] = projection_arcs
+        snapshots.append(snapshot)
+    return snapshots
+
+
+def _member_parts_by_id(member: dict[str, object]) -> dict[str, dict[str, object]]:
+    raw_parts = member.get("Parts") or member.get("parts") or []
+    if not isinstance(raw_parts, list):
+        return {}
+    result = {}
+    for raw_part in raw_parts:
+        if not isinstance(raw_part, dict):
+            continue
+        part_id = str(raw_part.get("PartId") or raw_part.get("partId") or raw_part.get("part_id") or "")
+        if part_id:
+            result[part_id] = raw_part
+    return result
+
+
+def _drawing_projection_edges(part: dict[str, object]) -> list[dict[str, object]]:
+    explicit = part.get("projectionEdges")
+    if isinstance(explicit, list):
+        return _normalize_projection_edges(explicit)
+    solid_edges = part.get("SolidEdges") or part.get("solidEdges") or []
+    if not isinstance(solid_edges, list):
+        return []
+    edges = []
+    seen: set[tuple[float, float, float, float]] = set()
+    for raw_edge in solid_edges:
+        if not isinstance(raw_edge, dict):
+            continue
+        start = _point_3d(raw_edge.get("Start") or raw_edge.get("start"))
+        end = _point_3d(raw_edge.get("End") or raw_edge.get("end"))
+        if start is None or end is None:
+            continue
+        edge = (
+            _round_mm(start[0]),
+            _round_mm(start[2]),
+            _round_mm(end[0]),
+            _round_mm(end[2]),
+        )
+        if edge in seen or (edge[0] == edge[2] and edge[1] == edge[3]):
+            continue
+        seen.add(edge)
+        edges.append({"start": {"x": edge[0], "y": edge[1]}, "end": {"x": edge[2], "y": edge[3]}})
+    return edges
+
+
+def _normalize_projection_edges(raw_edges: list[object]) -> list[dict[str, object]]:
+    edges = []
+    for raw_edge in raw_edges:
+        if not isinstance(raw_edge, dict):
+            continue
+        start = _point_2d(raw_edge.get("start") or raw_edge.get("Start"))
+        end = _point_2d(raw_edge.get("end") or raw_edge.get("End"))
+        if start is None or end is None:
+            continue
+        edges.append({"start": {"x": start[0], "y": start[1]}, "end": {"x": end[0], "y": end[1]}})
+    return edges
+
+
+def _drawing_projection_arcs(part: dict[str, object]) -> list[dict[str, object]]:
+    raw_arcs = part.get("projectionArcs") or part.get("projection_arcs") or []
+    if not isinstance(raw_arcs, list):
+        return []
+    arcs = []
+    for raw_arc in raw_arcs:
+        if not isinstance(raw_arc, dict):
+            continue
+        center = _point_2d(raw_arc.get("center") or raw_arc.get("Center"))
+        radius = _float_value(raw_arc.get("radius") or raw_arc.get("Radius"))
+        if center is None or radius <= 0:
+            continue
+        arcs.append(
+            {
+                "center": {"x": center[0], "y": center[1]},
+                "radius": _round_mm(radius),
+                "start_angle": _round_mm(_float_value(raw_arc.get("start_angle") or raw_arc.get("startAngle") or raw_arc.get("StartAngle"))),
+                "end_angle": _round_mm(_float_value(raw_arc.get("end_angle") or raw_arc.get("endAngle") or raw_arc.get("EndAngle"))),
+            }
+        )
+    return arcs
+
+
+def _point_3d(value: object) -> tuple[float, float, float] | None:
+    if not isinstance(value, dict):
+        return None
+    x = _float_value(value.get("X") or value.get("x"))
+    y = _float_value(value.get("Y") or value.get("y"))
+    z = _float_value(value.get("Z") or value.get("z"))
+    return x, y, z
+
+
+def _point_2d(value: object) -> tuple[float, float] | None:
+    if not isinstance(value, dict):
+        return None
+    x = _float_value(value.get("x") or value.get("X") or value.get("u") or value.get("U"))
+    y = _float_value(value.get("y") or value.get("Y") or value.get("v") or value.get("V"))
+    return _round_mm(x), _round_mm(y)
+
+
+def _float_value(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _round_mm(value: float) -> float:
+    return round(float(value), 3)
+
+
+def _requires_drawing_detail(part: dict[str, object], evidence: dict[str, object]) -> bool:
+    face = str(evidence.get("bodyFaceId") or "").upper()
+    name = str(part.get("name") or "")
+    return bool(
+        part.get("boltHoleCount")
+        or "对接" in name
+        or "牛腿" in name
+        or "连接" in name
+        or "OUT" in face
+    )
+
+
+def _drawing_axis_segments(member: dict[str, object]) -> list[dict[str, object]]:
+    segments = []
+    for raw_segment in member.get("AxisSegments", []):
+        if not isinstance(raw_segment, dict):
+            continue
+        start = raw_segment.get("CumulativeStart", 0)
+        end = raw_segment.get("CumulativeEnd", 0)
+        direction = raw_segment.get("Direction", {})
+        angle = 0.0
+        if isinstance(direction, dict):
+            dx = float(direction.get("X") or direction.get("x") or 0)
+            dz = float(direction.get("Z") or direction.get("z") or 0)
+            if dz:
+                angle = math.degrees(math.atan2(dx, dz))
+        segments.append(
+            {
+                "segment_id": str(raw_segment.get("Index", len(segments))),
+                "station_start": start,
+                "station_end": end,
+                "angle_deg": round(angle, 3),
+            }
+        )
+    return segments
 
 
 def _flatten_box_assembly_drawing_steps(rows: list[dict[str, object]]) -> list[dict[str, object]]:

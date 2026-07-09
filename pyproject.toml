@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Tekla processing recognition helpers for Zijinhua workflows"
 requires-python = ">=3.10"
 dependencies = [
+    "ezdxf",
     "pandas",
     "shapely",
 ]
