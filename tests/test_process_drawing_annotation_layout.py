@@ -1,6 +1,8 @@
+import json
 import unittest
 
 from zijinhua_tekla.reports.annotation_layout import (
+    AnnotationIntent,
     AnnotationKind,
     LayoutStatus,
     PartAnchor,
@@ -73,10 +75,57 @@ class ProcessDrawingAnnotationLayoutTests(unittest.TestCase):
         self.assertEqual(LayoutStatus.NEEDS_DETAIL_VIEW, layout.status)
         self.assertGreater(len(layout.unplaced_items), 0)
 
+    def test_unplaced_generic_warning_returns_non_ok_status(self):
+        scene = ProjectionScene(
+            view_id="tiny",
+            drawing_bounds=Rect(0.0, 0.0, 80.0, 45.0),
+            main_view_bounds=Rect(10.0, 10.0, 60.0, 30.0),
+            model_length=100.0,
+            model_width=50.0,
+            model_thickness=10.0,
+            source_part_id="p1",
+            source_part_position="P1",
+            source_profile="PL10",
+            source_name="TEST",
+        )
+        warning = AnnotationIntent(
+            id="warning-too-low",
+            kind=AnnotationKind.WARNING,
+            priority=10,
+            text="数据不足，需复核",
+            fallback_policy="review_required",
+        )
+        layout = layout_annotation_intents(scene, [warning])
+        self.assertEqual(LayoutStatus.REVIEW_REQUIRED, layout.status)
+        self.assertEqual([warning], layout.unplaced_items)
+
+    def test_dimension_line_endpoint_outside_drawing_bounds_returns_overflow(self):
+        scene = ProjectionScene(
+            view_id="main",
+            drawing_bounds=Rect(0.0, 0.0, 599.0, 420.0),
+            main_view_bounds=Rect(2.0, 80.0, 535.0, 165.6),
+            model_length=3505.0,
+            model_width=600.0,
+            model_thickness=30.0,
+            source_part_id="28705233",
+            source_part_position="10-3Z-128",
+            source_profile="BOX600*600*30*30",
+            source_name="GKZ60-2",
+        )
+        intent = AnnotationIntent(
+            id="overall-length",
+            kind=AnnotationKind.OVERALL_DIMENSION,
+            priority=100,
+            text="3505",
+        )
+        layout = layout_annotation_intents(scene, [intent])
+        self.assertEqual(LayoutStatus.OVERFLOW, layout.status)
+
     def test_layout_serializes_to_jsonable_contract(self):
         scene = self._u_stage_scene()
         layout = layout_annotation_intents(scene, build_u_stage_annotation_intents(scene))
         data = layout_to_jsonable(layout)
+        self.assertIsInstance(json.dumps(data, ensure_ascii=False), str)
         self.assertEqual("OK", data["layout_status"])
         self.assertEqual(0, data["collision_count"])
         self.assertTrue(any(item["kind"] == "TEXT" for item in data["placed_items"]))

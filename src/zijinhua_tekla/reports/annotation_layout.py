@@ -255,10 +255,16 @@ def layout_annotation_intents(scene: ProjectionScene, intents: list[AnnotationIn
 
     collision_count = _count_text_collisions(scene, texts)
     overflow_count = sum(1 for text in texts if not _contains(scene.drawing_bounds, text.box))
-    if unplaced_items and part_mark_count > max_part_marks:
+    overflow_count += sum(1 for line in lines if _line_endpoint_outside(scene.drawing_bounds, line))
+    requires_detail_view = any(
+        intent.fallback_policy == LayoutStatus.NEEDS_DETAIL_VIEW.value for intent in unplaced_items
+    )
+    if requires_detail_view or (unplaced_items and part_mark_count > max_part_marks):
         status = LayoutStatus.NEEDS_DETAIL_VIEW
     elif overflow_count:
         status = LayoutStatus.OVERFLOW
+    elif unplaced_items:
+        status = LayoutStatus.REVIEW_REQUIRED
     elif collision_count:
         status = LayoutStatus.REVIEW_REQUIRED
     else:
@@ -488,6 +494,17 @@ def _contains(container: Rect, item: Rect) -> bool:
         and item.top >= container.top
         and item.bottom <= container.bottom
     )
+
+
+def _line_endpoint_outside(container: Rect, line: LayoutLine) -> bool:
+    return not (
+        _contains_point(container, line.x1, line.y1)
+        and _contains_point(container, line.x2, line.y2)
+    )
+
+
+def _contains_point(container: Rect, x: float, y: float) -> bool:
+    return container.left <= x <= container.right and container.top <= y <= container.bottom
 
 
 def _intent_to_jsonable(intent: AnnotationIntent) -> dict[str, Any]:
