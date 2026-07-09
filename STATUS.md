@@ -114,6 +114,35 @@
 
 2026-07-06：BOX 柱子渐进式构件图第一版已落地。离线 pipeline/report 输出 `box-assembly-drawing-steps.json/csv/md/dxf`；当前 Tekla 选中构件 `T3-3GZ-6` 生成 29 步（基准主板、侧壁、7 个内部组、盖板、19 个外部簇），DXF 预览见 `outputs/box-progressive-drawing-selected-20260706/T3-3GZ-6-box-assembly-drawing-steps.dxf`。Tekla 2017 POC 已定位并修复外部 API 连接前置条件 `SESSIONNAME=Console`，并验证 `DrawingCreator + ch_column.xdproc` 可生成构件图；自动打开生成图纸并套用隐藏/标注仍待下一步突破。验证记录：`docs/verification/2026-07-06-box-column-progressive-drawing-steps.md`。
 
+2026-07-06：按参考 `4.西岑文化艺术中心地上三节柱组立图2026.07.03.dwg` 修正 BOX 渐进式 DXF 方向：旧步骤卡片式 DXF 已替换为主视组立图第一版。每步图框包含 station 比例主视、总长/阶段 station 尺寸、当前新增零件引出标注、阶段注释和材料表；剖面图暂不生成，仅作为主视表达不清时的后续增强。当前 `T3-3GZ-6` 已重新输出 DXF 和 PNG 预览：`outputs/box-progressive-drawing-selected-20260706/T3-3GZ-6-box-assembly-drawing-steps.dxf`、`outputs/box-progressive-drawing-selected-20260706/T3-3GZ-6-box-assembly-drawing-steps-preview-first3.png`。验证记录：`docs/verification/2026-07-06-box-column-main-view-assembly-drawing.md`。
+
+2026-07-07：用户提供 Claude 工序图技术指导 v3 后，已将 BOX 柱 DXF 兜底图从“主视示意第一版”进一步修正为累计工序图口径。当前渲染器维护累计 installed parts；PartMark、局部详图和 BOM 优先显示本步新增项；焊缝说明累计保留并绑定文字；尺寸链改为外侧全部通高 + 内侧连续详细链；折弯柱按真实 segment 倾角投影并自动推断 Section 标记，不画折断符号/偏转角。`T3-3GZ-6` 已重新输出 DXF 和前三步预览，DXF TEXT 读回中文正常，PNG 预览因 matplotlib 字体缺中文会显示方块。设计见 `docs/design/2026-07-07-box-process-drawing-claude-guidance.md`，验证见 `docs/verification/2026-07-07-box-process-drawing-claude-guidance.md`。
+
+2026-07-07 复核修正：用户指出当前输出仍与参考 `4.西岑文化艺术中心地上三节柱组立图2026.07.03.dxf` 差距很大。已对比确认根因是把 29 个步骤纵向堆成一个 640 x 23863.9 的长卷，而参考图是 596.5 x 420 的单张阶段图纸。已修正 `box-assembly-drawing-steps.dxf` 默认只渲染一个阶段图纸，优先选择第一个 `ADD_INTERNAL_GROUP` 阶段；支持 `render_step_no` 指定阶段；PartMark 改为靠近锚点并限制旧件，BOM 放右上并限行。当前输出 bbox 为 599 x 420，实体数约 244。仍未达到 Tekla 正式图纸水平，下一步必须补真实投影/剖面几何或转 Tekla drawing object 路线。
+
+2026-07-07 二次修正：用户明确“多张工序图是对的，但每张必须用真实几何投影、零件标号、尺寸标注，折弯/弧形需角度或半径标注”。已定位上一版真正根因：`member_T3-3GZ-6.json` 的 95 个零件有 `SolidEdges`，但 `box-assembly-drawing-steps.json` 丢失了几何快照。现已将 `result.member.Parts` 的 `SolidEdges` 合并为 drawing payload 的 `projectionEdges`，DXF 默认恢复为 29 张阶段页、3 列 sheet 网格，每页主视优先画真实投影线，缺几何才 fallback 到 station 矩形；折弯测试输出 `BEND 8°`，弧形契约输出 `ARC/Rxxx`。真实 smoke 中 95/95 零件带 `projectionEdges`，总投影边 3349 条，DXF 29 页、66564 entities、Part 层非水平/垂直线 9336 条。设计见 `docs/design/2026-07-07-box-process-drawing-true-projection.md`，验证见 `docs/verification/2026-07-07-box-process-drawing-true-projection.md`。
+
+2026-07-07 DXF 打开性修复：用户反馈 DXF 提示无效。已确认旧 `_DxfWriter` 声明 `AC1021/R2007`，但手写文件缺少完整 `TABLES/BLOCKS` 和 `AcDbEntity/AcDbLine/AcDbText` subclass 结构；本地 `ezdxf.audit()` 可读不代表严格 CAD 可打开。现已改用 `ezdxf.new("R2007", setup=True)` 正规写出 DXF，并新增依赖 `ezdxf`。重新生成的 `T3-3GZ-6-box-assembly-drawing-steps.dxf` 包含 `TABLES=3`、`BLOCKS=1`、`AcDbEntity=66577`、`AcDbLine=63105`、`AcDbText=6748`，audit `errors=0/fixes=0`，全量测试 `121 tests OK`。
+
+2026-07-07 胎架/翻身/步骤合并修正：按用户反馈补入真实制造口径，`BASE_MAIN_WALL` 现在输出 `fixture_face/fixture_role` 并在 DXF note 中标注 `FIXTURE`；同一底面分段主板合并为一个基准步骤；外部零件簇先按空间簇起草，再按翻身面合并。真实外部件缺 `bodyFaceId` 时，使用 `box-part-spatial-relations` 的 `projected_centroid_u/v` 推断 `RADIAL_X/Y_POS/NEG` 工作面。当前 `T3-3GZ-6` smoke 从 29 步收敛为 14 步，其中 1 个胎架基准步骤、4 个外部翻身阶段；DXF 输出 `FIXTURE RADIAL_Y_NEG`、`UP FACE ...`、`FLIP 90`，`ezdxf.audit()` 为 `errors=0/fixes=0`，全量测试 `125 tests OK`。设计见 `docs/design/2026-07-07-box-process-fixture-flip-merge.md`，验证见 `docs/verification/2026-07-07-box-process-fixture-flip-merge.md`。
+
+2026-07-07 Tekla Open API 既有构件图探测：当前 Tekla 2017 进程可连接，`DrawingHandler.GetDrawings()` 枚举到 2394 张图纸，当前 active drawing 为空；当前模型中有大量 `10#三节柱` 构件图，但没有匹配离线 cache 的 `T3-3GZ-6 / assembly 63737929`。`--selected-model` 读到当前模型选择集为 0。已用 `--inspect-drawing-model-id 28717373` 成功打开既有 `10-3GZ-.6 / G10-Z3-06` AssemblyDrawing，并读到 sheet 内 `Part=160`、`Mark=40`、`View=4`；未执行 hide/show/save。结论：以 Tekla 原生构件图为基准，通过隐藏/显示零件做阶段图的路线机械上可行，下一步应先让用户在当前 Tekla 模型选中目标构件，并在复制图纸上测试隐藏后尺寸/标注保留情况。验证见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
+2026-07-07 以 `10-3GZ-.6 / G10-Z3-06` 做 Tekla 原生隐藏工序图 POC：新增 POC 命令 `--generate-process-drawings-model-id 28717373`，读取原图 sheet 0 的 40 个唯一 drawing part id 后关闭原图不保存，再为同一 assembly 新建 sheet 1-5。5 张新图纸已保存到 Tekla 图纸列表，Mark 分别为 `[10-3GZ-.6 - 1]` 至 `[10-3GZ-.6 - 5]`；每步可见唯一零件数为 8/16/24/32/40，对应保存日志 `matched=24/48/72/96/120`、`hidden=96/72/48/24/0`。生成计划文件 `outputs\tekla-process-drawings-10-3GZ-6\tekla-process-drawings-28717373.json`。这验证了“新建同构件 sheet + HideFromDrawingView/ShowInDrawingView”可以生成原生 Tekla 阶段图；当前步骤仍是机械均分 POC，不是最终工艺分组。
+
+2026-07-07 sheet 1-5 读回复核：`--inspect-process-sheets-model-id 28717373` 已逐张打开现有图纸并统计对象。原图 sheet 0 为 `Part=160/Mark=40/Dimensions=96/Text=5/View=4`；新建 sheet 1-5 均为 `Part=120/Mark=40/Dimensions=0/Text=0/View=3/HiddenParts=0`。结论：当前 `new AssemblyDrawing(..., sheetNumber)` 生成的是 `STANDARD` 图，不能保留原构件图尺寸、注释和阶段隐藏状态，不可作为正式工序图基础。额外尝试 `new AssemblyDrawing(id, sheet, "10#三节柱")` 生成坏 sheet 6，Tekla 报“无法加载所选图纸，图纸文件不兼容”，已删除坏 sheet 6 并恢复现场。下一步 Tekla 原生路线必须先验证“克隆既有 sheet 0”能否保留尺寸/标注；若克隆不可稳定自动化，则改为新 sheet 上重建关键尺寸、PartMark 和阶段注释。验证见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
+2026-07-07 克隆路线探测：已确认当前 TS2017 China 环境中 Drawing List 的 `diaSavedSearchOptionMenu=7` 可选中 `10-3GZ-.6` 原图 sheet 0；旧宏 value `10` 选不中。value `16` 会把 Tekla 切到“选择设置”界面并临时断开 DrawingHandler，已恢复模型并将探测上限限制为 15。执行 `--probe-clone-drawing-model-id 28717373` 时，宏能选中 sheet 0 并进入 Tekla 自带 `克隆图纸` 对话，但随后弹出 `视图` 可见性选择和早期版本提示，程序侧轮询被模态 UI 阻塞；已关闭对话并确认当前 active drawing 为空、目标仍只有原图 sheet 0，没有误生成克隆图。结论：克隆路线仍可继续，但必须继续宏化 `克隆图纸/视图` 对话；公开 Open API 本身没有直接 Clone/Copy drawing 方法。
+
+2026-07-07 sheet 1-5 现场重开复核：按用户要求关闭遗留克隆对话后重新生成机械验证 sheet 1-5，并逐张打开读回。原图 sheet 0 仍为 `Part=160/Mark=40/Dimensions=96/Text=5/View=4`；sheet 1-5 均为 `Part=120/Mark=40/Dimensions=0/Text=0/View=3/HiddenParts=0`。结论再次确认：`new AssemblyDrawing(..., sheetNumber)` 新建副页不能继承原构件图尺寸、文字注释和稳定隐藏状态，不适合做正式工序图底图。记录见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
+2026-07-07 Tekla 标注复制/阶段筛选继续探测：通过 `Text.Insert()` 与 `StraightDimensionSetHandler.CreateDimensionSet()` 已证明可把原图 sheet 0 的 `Text=5`、23 组直线尺寸复制到新建副页，副页读回可达到 `Dimensions=96/Text=5`。但阶段筛选仍未解决：`Hideable` 不持久；删除多余 Drawing Part 即时有效但重开后被 Tekla 恢复；反射设置 `View.Parts` 无实际筛选效果；剪裁后锁定 sheet 会导致该副页打不开，坏 sheet 1 已删除。当前 sheet 2-5 可打开并保留复制标注，但仍是全量零件。下一步 Tekla 原生路线应转为“副页上重建/绘制阶段几何 + 复制/重建关键尺寸、PartMark、注释”，不再依赖 Tekla 自动 Part 对象隐藏。记录见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
+2026-07-07 追加打开 5 张新验证副页检查尺寸/标注保留：因 sheet 1 已删除，本轮生成 `10-3GZ-.6` 的 sheet 6-10，并明确从原图 sheet 0 复制 `Text=5` 和 23 组直线尺寸集。5 张副页关闭重开后均读回 `Parts=120/Marks=40/Dimensions=96/Text=5/Views=3/HiddenParts=0`。结论：尺寸和文字标注复制保存稳定，但 PartMark 和零件对象仍是全量，阶段隐藏仍不持久；正式工序图不能再靠 AssemblyDrawing 自动 Part 对象隐藏，应改为按工序步骤重建阶段几何并复制/重建关键尺寸、零件标号和阶段注释。记录见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
+2026-07-08 胎架真实投影 GA 原型：已新增 Tekla POC 命令 `--probe-ga-fixture-projection-model-id`，针对 `10-3GZ-.6 / modelId=28717373` 生成 `PROCESS-FIXTURE-10-3GZ-6-S1`。第 1 步 8 个零件从 Tekla `Part.GetSolid().GetEdgeEnumerator()` 读取 248 条 solid edge，按胎架坐标投影后插入 248 条普通 Line，`failed=0`；frame 为 `MODEL_AXIS_2_HEIGHT_0_MIN_ON_FIXTURE`，即模型长轴 2 转图纸横向，模型轴 0 最小侧为胎架底面。重开读回 `lines=248/texts=4/dims=2/parts=0/marks=0/views=0`。结论：重建几何可稳定保存且不被 Tekla 自动 Part 对象污染；下一步要补可见边过滤、真实工艺步骤映射、PartMark 和定位尺寸避让。记录见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
+2026-07-08 胎架 U-stage GA 原型：针对 `10-3GZ-.6 / modelId=28717373` 生成 `PROCESS-FIXTURE-U-10-3GZ-6-S1`。根因确认：该构件主壁板在 Tekla 中是单个 `BOX600*600*30*30` 主零件 `28705233 / 10-3Z-128`，不是 4 个独立板件；因此第一阶段“底板 + 两侧板”需要走 `VIRTUAL_DECOMPOSED_BOX_PROFILE` 虚拟拆解。输出图纸按 Tekla solid 外包尺寸与 BOX profile 厚度绘制 U 形主视投影，长度 `3505`、宽 `600`、壁厚 `30`，插入 `lines=12/texts=5/dims=4`，重开读回 `parts=0/marks=0/views=0`。证据：`outputs/tekla-process-drawings-10-3GZ-6/tekla-ga-fixture-u-stage-28717373-step1.json`。
 ## 已确认业务口径
 
 - `T3-H-558s/x/f` 这类 Excel 加工板可以来自 `BH400*200*7*10` 型钢拆板；它们不是 Tekla 独立零件缺失。
@@ -148,7 +177,7 @@
 2. 对 `T3-P-3449`、`T3-P-4910` 补查是否为选中构件缺实体、制造口径差异或导出范围问题；不得用几何相似件自动改号。
 3. 基于统一主材分段入口继续补策略：H/GL 减少对 name 的依赖、BOX 在导出器补原生 `boxSectionEvidence`、T 型/十字/圆管新增策略，并将报告文件名从 box-main-material 迁移为通用 main-material。
 4. 未实现项：构件装配顺序、焊接顺序、配送顺序、图纸自动标注的数据契约、流水线和报告。
-5. 当前 BOX 渐进式构件图第一版已输出 `box-assembly-drawing-steps.json/csv/md/dxf`；下一步是打开已由 AutoDrawing 生成的 `T3-3GZ-6` 构件图，继续验证 Tekla 2017 POC 对 active drawing 按步骤隐藏/显示零件和插入标注。
+5. 当前 BOX 渐进式构件图 DXF 已从 station/lane 简化图升级为多张阶段页 + per-part `projectionEdges` 真实主视投影，并已补胎架底面、主板分段合并、外部翻身面合并。下一步重点是提升尺寸/PartMark 自动避让、最佳视向选择、正式剖面/局部详图几何，以及让 `CAN_SIDE` 侧焊判定接入工艺阈值；也可切回 Tekla 2017 active drawing 套图路线，在 Tekla 图纸对象中控制阶段显示/隐藏、PartMark、尺寸和材料表。
 
 ## 最新验证
 
@@ -239,10 +268,4 @@
 - BOX 内外关系层后单元测试：`python -m unittest discover -s tests`，70 tests OK。存在 `openpyxl` 的 `datetime.utcnow()` DeprecationWarning，不影响当前测试结果。
 - BOX 内外关系层 T3 smoke：`python -m zijinhua_tekla.cli analyze --root I:\xingcaisuanfa\cache\20260623_144836 --truth-root I:\xingcaisuanfa\cache\20260615_161938 --member-id T3-5GKZ-10 --out outputs\box-part-spatial-relations-smoke-20260623-v3`；新增 `box-part-spatial-relations.json/csv`，分布 `INSIDE_BODY=228`、`MAIN_WALL=16`、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`。
 - T3 空间诊断：附属件簇 `15`，`Bracket=2`，`Unknown=13`。
-
-
-
-
-
-
-
+2026-07-09：工序图标注/避让层第一版已落地。新增纯 Python `AnnotationLayout` 核心与 DXF adapter；Tekla U-stage POC 改为 `DrawingAnnotationLayout` DTO 后再用普通 `Line/Text` 渲染，避免 GA sheet 上原生 `StraightDimensionSet` 造成黑三角/粉色问号/乱码。目标 `10-3GZ-6 / modelId=28717373` 已生成 clean 图 `PROCESS-FIXTURE-U-10-3GZ-6-S1-CLEAN`，mark `[24]`；JSON 证据 `outputs/tekla-process-drawings-10-3GZ-6/tekla-ga-fixture-u-stage-28717373-step1.json` 显示 `annotation_layout_status=OK`、`annotation_collision_count=0`、`dimension_inserted=False`、`primitive_dimension_lines_inserted=True`、`layout lines=12/texts=9`、重开读回 `Lines=24/Texts=9/Dimensions=0/StraightDimensions=0/StraightDimensionSets=0/Parts=0/Marks=0/Views=0`。验证记录见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
