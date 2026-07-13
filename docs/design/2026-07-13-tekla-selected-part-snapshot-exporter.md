@@ -127,9 +127,9 @@ part
 
 ```text
 <output-directory>/
+├── part-drawing-export-summary.json
 └── part-drawing-snapshots/
-    ├── <safe-partPosition>-<partId>.json
-    └── export-summary.json
+    └── <safe-partPosition>-<partId>.json
 ```
 
 单个零件状态：
@@ -140,7 +140,7 @@ part
 
 一个零件失败不阻断其他零件。存在任意 `REJECTED` 时命令返回非零；只有 `SKIPPED` 且至少一个 `EXPORTED` 时可成功返回。
 
-汇总至少包含选择对象数、唯一 Part 数、三类状态数量、输出文件、part id、`partPosition`、原因码和消息。不得包含异常堆栈或过量 Tekla 对象转储。
+汇总至少包含选择对象数、唯一 Part 数、三类状态数量、输出文件、part id、`partPosition`、原因码和消息。汇总必须位于输出根目录，避免被 Python 的实体快照扫描当成输入。不得包含异常堆栈或过量 Tekla 对象转储。
 
 ## 代码边界
 

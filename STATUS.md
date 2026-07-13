@@ -1,3 +1,9 @@
+## Handoff - 2026-07-13 Tekla 选择集零件快照真实闭环
+
+已在隔离 worktree `I:\tmp\xingcaisuanfa-part-snapshot-exporter`、分支 `codex/part-drawing-snapshot-exporter` 实现 `--export-part-drawing-snapshots`。C# `26 tests OK`，Runner build 通过；Python focused `11 tests OK`、完整 `165 tests OK`。真实 Tekla 当前选择平板 `T3-PX-317 / partId=45416496` 导出 `EXPORTED=1/REJECTED=0`，离线出图 `REVIEW_REQUIRED=1/REJECTED=0`；DXF audit `0/0`，PDF A3 横向单页。证据见 `docs/verification/2026-07-13-tekla-selected-part-snapshot-exporter.md`。
+
+当前未完成：图纸有 17 个孔相关标注未放置，需用户人工复核；ARC 原生圆心导出尚未完成，无法证明的曲线会安全拒绝。用户确认图面前不合并 PR #1。
+
 ## Handoff - 2026-07-13 Tekla 当前选择集零件图快照导出器
 
 当前正式设计已确认：在 `I:\xingcaisuanfa` 新增命令行参数 `--export-part-drawing-snapshots`，只读取 Tekla 当前选择集中的直接平板 `Part`，每个实体输出独立 `partDrawingSnapshot.v1`，随后由 Python `draw-parts` 单独生成 DXF/PDF。设计见 `docs/design/2026-07-13-tekla-selected-part-snapshot-exporter.md`。
