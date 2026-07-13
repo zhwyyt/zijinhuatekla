@@ -1,3 +1,9 @@
+## Handoff - 2026-07-13 Tekla 当前选择集零件图快照导出器
+
+当前正式设计已确认：在 `I:\xingcaisuanfa` 新增命令行参数 `--export-part-drawing-snapshots`，只读取 Tekla 当前选择集中的直接平板 `Part`，每个实体输出独立 `partDrawingSnapshot.v1`，随后由 Python `draw-parts` 单独生成 DXF/PDF。设计见 `docs/design/2026-07-13-tekla-selected-part-snapshot-exporter.md`。
+
+当前边界：C# 不启动 Python、不扩展到整个 Assembly、不做同编号归并；不能证明圆心的曲线必须拒绝，禁止静默折线化。下一步在导出器仓库按 TDD 实现并做跨语言契约测试；真实 Tekla smoke 和人工图面复核通过前不合并离线引擎 PR #1。
+
 ## Handoff - 2026-06-26 H钢位置关系阶段收敛
 
 当前仓库：`I:\zijinhuatekla`，分支 `main`，已推送到 `origin/main`。

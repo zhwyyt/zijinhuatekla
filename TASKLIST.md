@@ -1,5 +1,9 @@
 # TASKLIST
 
+- [x] 确认 Tekla 当前选择集零件图快照导出器设计：命令行独立模式、只处理直接选中的平板 Part、每实体一份 `partDrawingSnapshot.v1`、Python 单独出图。
+- [ ] 在 `I:\xingcaisuanfa` 按 TDD 实现 `--export-part-drawing-snapshots`、DTO、平板质量门、最终面环、孔槽与汇总输出。
+- [ ] 完成 C# 构建/测试和 Python 跨语言契约回归。
+- [ ] 用真实 Tekla 平板选择集跑通 snapshot -> DXF/PDF，并完成人工图面复核后再决定是否合并 PR #1。
 - [x] 建立可复用规则层：规格标准化、PL 解析、名义加工尺寸、BH 拆板派生。
 - [x] 建立 Excel/Tekla bundle 对齐层：按零件号、规格、长度、几何候选匹配。
 - [x] 输出 T3-5GKZ-10 对齐结果：CSV、JSON、Markdown。
