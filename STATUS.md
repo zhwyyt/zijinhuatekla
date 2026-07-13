@@ -1,3 +1,15 @@
+## Handoff - 2026-07-13 平板零件离线出图引擎
+
+工作目录：`I:\tmp\zijinhuatekla-part-drawing-engine`，分支 `codex/offline-part-drawing-engine`。
+
+当前阶段：已完成 `partDrawingSnapshot.v1` 离线消费端和可人工复核的平板零件 DXF/PDF/drawing JSON 出图闭环。实现包括几何归一化、制造指纹质量门、加工特征、尺寸意图、布局、共享文档、双 renderer 和 `draw-parts` 批处理 CLI。
+
+最新验证：零件图 focused `33 tests OK`；完整回归 `165 tests OK`；fixture CLI smoke `OK=1 / REVIEW_REQUIRED=0 / REJECTED=0`；DXF audit `0 errors/0 fixes`；PDF 单页 A3 横向。证据见 `docs/verification/2026-07-13-offline-part-drawing-engine.md`。
+
+当前边界：尚未实现 Tekla 导出器的 `partDrawingSnapshot.v1` 生产端，也没有真实模型 smoke；当前 `OK` 只表示自动出图完整，不代表生产放行。
+
+下一步：单独设计并实现 Tekla 快照生产端，选择真实平板件做首轮模型到 DXF/PDF 人工复核。禁止用几何相似替代 `partPosition`，禁止围绕零件号补特例。
+
 ## Handoff - 2026-06-26 H钢位置关系阶段收敛
 
 当前仓库：`I:\zijinhuatekla`，分支 `main`，已推送到 `origin/main`。

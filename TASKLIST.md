@@ -1,5 +1,15 @@
 # TASKLIST
 
+## 平板零件离线出图 - 2026-07-13
+
+- [x] 建立 `partDrawingSnapshot.v1` 离线消费契约和严格校验。
+- [x] 完成平板几何归一化、加工特征、尺寸意图、布局和 `PartDrawingDocument` 五模块链路。
+- [x] 完成共享 DXF/PDF/drawing JSON 输出、DXF audit、PDF 读回和 CJK 字体失败门。
+- [x] 完成 `draw-parts` 批处理 CLI、同编号制造指纹冲突门、失败隔离和批次摘要。
+- [x] 完成 fixture smoke 和全量回归，证据见 `docs/verification/2026-07-13-offline-part-drawing-engine.md`。
+- [ ] 在 Tekla 导出器实现 `partDrawingSnapshot.v1` 生产端。
+- [ ] 用真实 Tekla 平板零件完成首轮快照与 DXF/PDF 人工复核。
+
 - [x] 建立可复用规则层：规格标准化、PL 解析、名义加工尺寸、BH 拆板派生。
 - [x] 建立 Excel/Tekla bundle 对齐层：按零件号、规格、长度、几何候选匹配。
 - [x] 输出 T3-5GKZ-10 对齐结果：CSV、JSON、Markdown。
