@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import ezdxf
+from ezdxf.render.arrows import ARROWS
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
@@ -22,6 +23,7 @@ from .dimension_optimizer import (
     ModelTransform,
     PartDrawingLayout,
     PlacedDimension,
+    PlacedDimensionKind,
 )
 from .feature_recognizer import FeatureType, RecognizedFeature
 from .geometry_analyzer import NormalizedPlateGeometry, NormalizedSegment, Point2D
@@ -37,6 +39,9 @@ LAYERS = {
     "TITLE_BLOCK": 7,
     "REVIEW": 1,
 }
+
+DXF_DIMSTYLE_NAME = "PART-CAD-V1"
+DXF_DIMTEXT_STYLE_NAME = "TArial"
 
 
 @dataclass(frozen=True)
@@ -236,16 +241,101 @@ def _render_dxf(document: PartDrawingDocument, path: Path) -> None:
     for name, color in LAYERS.items():
         if name not in dxf.layers:
             dxf.layers.add(name, color=color)
+    _ensure_dxf_dimension_style(dxf, document)
     modelspace = dxf.modelspace()
     for primitive in document.contour_segments + document.inner_segments + document.annotation_lines:
         _add_dxf_primitive(modelspace, primitive)
     for item in document.annotation_text_items:
         modelspace.add_text(item.text, dxfattribs={"insert": (item.x, item.y), "height": item.height, "layer": item.layer})
+    for dimension in document.placed_dimensions:
+        _add_dxf_dimension(modelspace, document, dimension)
     _add_dxf_title(modelspace, document)
     dxf.saveas(path)
     audit = ezdxf.readfile(path).audit()
     if audit.has_errors:
         raise PartDrawingRenderError(f"DXF audit failed with {len(audit.errors)} errors")
+
+
+def _ensure_dxf_dimension_style(dxf, document) -> None:
+    style = document.dimension_style
+    if DXF_DIMTEXT_STYLE_NAME not in dxf.styles:
+        dxf.styles.new(
+            DXF_DIMTEXT_STYLE_NAME,
+            dxfattribs={"font": "arial.ttf", "width": style.text_width_factor},
+        )
+    if DXF_DIMSTYLE_NAME in dxf.dimstyles:
+        dimstyle = dxf.dimstyles.get(DXF_DIMSTYLE_NAME)
+    else:
+        dimstyle = dxf.dimstyles.new(DXF_DIMSTYLE_NAME)
+    dimstyle.dxf.dimtxsty = DXF_DIMTEXT_STYLE_NAME
+    dimstyle.dxf.dimtxt = style.text_height_mm
+    dimstyle.dxf.dimasz = style.arrow_size_mm
+    dimstyle.dxf.dimexo = style.extension_offset_mm
+    dimstyle.dxf.dimexe = style.extension_beyond_mm
+    dimstyle.dxf.dimgap = style.text_gap_mm
+    dimstyle.dxf.dimdec = style.decimal_places
+    dimstyle.dxf.dimzin = 8 if style.suppress_trailing_zeros else 0
+    dimstyle.dxf.dimtad = 1 if style.text_above_line else 0
+    dimstyle.dxf.dimscale = 1.0
+    dimstyle.dxf.dimclrd = 256
+    dimstyle.dxf.dimclre = 256
+    dimstyle.dxf.dimclrt = 256
+    dimstyle.set_arrows(
+        blk=style.linear_arrow_name,
+        ldrblk=style.leader_arrow_name,
+    )
+
+
+def _add_dxf_dimension(modelspace, document, dimension) -> None:
+    factor = document.dimension_style.measurement_factor(document.scale)
+    override = {"dimlfac": factor}
+    text = _dxf_dimension_text(dimension)
+    if dimension.kind == PlacedDimensionKind.LINEAR_HORIZONTAL:
+        rendered = modelspace.add_linear_dim(
+            base=dimension.dimension_line_point,
+            p1=dimension.source_points[0],
+            p2=dimension.source_points[1],
+            angle=0.0,
+            text=text,
+            dimstyle=DXF_DIMSTYLE_NAME,
+            override=override,
+            dxfattribs={"layer": "DIMENSION"},
+        )
+    elif dimension.kind == PlacedDimensionKind.LINEAR_VERTICAL:
+        rendered = modelspace.add_linear_dim(
+            base=dimension.dimension_line_point,
+            p1=dimension.source_points[0],
+            p2=dimension.source_points[1],
+            angle=90.0,
+            text_rotation=90.0,
+            text=text,
+            dimstyle=DXF_DIMSTYLE_NAME,
+            override=override,
+            dxfattribs={"layer": "DIMENSION"},
+        )
+    else:
+        center = dimension.source_points[0]
+        method = (
+            modelspace.add_diameter_dim
+            if dimension.kind == PlacedDimensionKind.DIAMETER
+            else modelspace.add_radius_dim
+        )
+        rendered = method(
+            center=center,
+            radius=dimension.paper_radius,
+            angle=0.0,
+            location=dimension.dimension_line_point,
+            text=text,
+            dimstyle=DXF_DIMSTYLE_NAME,
+            override={**override, "dimblk": ARROWS.closed_filled},
+            dxfattribs={"layer": "DIMENSION"},
+        )
+    rendered.render()
+
+
+def _dxf_dimension_text(dimension) -> str:
+    plain = f"{dimension.measured_value_mm:g}"
+    return "<>" if dimension.display_text == plain else dimension.display_text
 
 
 def _add_dxf_primitive(modelspace, primitive) -> None:

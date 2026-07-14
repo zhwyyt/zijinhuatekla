@@ -56,6 +56,30 @@ class PartDrawingOutputTests(unittest.TestCase):
             self.assertTrue(paths.json_path.exists())
             dxf = ezdxf.readfile(paths.dxf_path)
             self.assertFalse(dxf.audit().has_errors)
+            dimensions = list(dxf.modelspace().query("DIMENSION"))
+            self.assertEqual(2, len(dimensions))
+            self.assertFalse(
+                list(dxf.modelspace().query('LINE[layer=="DIMENSION"]'))
+            )
+            style = dxf.dimstyles.get("PART-CAD-V1")
+            self.assertEqual(2.5, style.dxf.dimtxt)
+            self.assertEqual(2.0, style.dxf.dimasz)
+            self.assertEqual(2.5, style.dxf.dimexo)
+            self.assertEqual(2.0, style.dxf.dimexe)
+            self.assertEqual(1.0, style.dxf.dimgap)
+            self.assertEqual(0, style.dxf.dimdec)
+            self.assertEqual(8, style.dxf.dimzin)
+            self.assertEqual("_OBLIQUE", style.dxf.dimblk)
+            self.assertEqual(0.65, dxf.styles.get("TArial").dxf.width)
+            raw_measurements = sorted(
+                float(item.get_measurement()) for item in dimensions
+            )
+            self.assertEqual([100.0, 200.0], raw_measurements)
+            for entity in dimensions:
+                overrides = entity.get_acad_dstyle(
+                    dxf.dimstyles.get(entity.dxf.dimstyle)
+                )
+                self.assertEqual(1.0, overrides["dimlfac"])
             payload = json.loads(paths.json_path.read_text(encoding="utf-8"))
             self.assertEqual(self.document.part_position, payload["part_position"])
             self.assertEqual(self.document.annotation_texts(), payload["annotation_texts"])
@@ -96,8 +120,12 @@ class PartDrawingOutputTests(unittest.TestCase):
         self.assertTrue(any(item.__class__.__name__ == "DrawingCircle" for item in document.inner_segments))
         with tempfile.TemporaryDirectory() as directory:
             paths = render_part_drawing(document, Path(directory))
-            entities = list(ezdxf.readfile(paths.dxf_path).modelspace().query("CIRCLE"))
+            modelspace = ezdxf.readfile(paths.dxf_path).modelspace()
+            entities = list(modelspace.query("CIRCLE"))
             self.assertEqual(1, len(entities))
+            dimensions = list(modelspace.query("DIMENSION"))
+            self.assertEqual(5, len(dimensions))
+            self.assertIn("DIA22", {entity.dxf.text for entity in dimensions})
 
     def test_chinese_pdf_text_requires_explicit_cjk_font(self):
         document = replace(
