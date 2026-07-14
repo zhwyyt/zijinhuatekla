@@ -5,6 +5,7 @@ from enum import Enum
 
 from .contracts import DrawingStatus
 from .dimension_generator import DimensionKind
+from .dimension_planner import Axis, DimensionPlan, PlanSide
 from .dimension_style import PART_CAD_DIMENSION_STYLE_V1
 
 
@@ -12,6 +13,7 @@ PAGE_WIDTH = 420.0
 PAGE_HEIGHT = 297.0
 TITLE_BLOCK_TOP = 242.0
 STANDARD_SCALES = (1.0, 0.5, 0.2, 0.1, 0.05)
+LAYER_SPACING_MM = 8.0
 
 
 @dataclass(frozen=True)
@@ -110,6 +112,8 @@ class PartDrawingLayout:
 
 
 def optimize_dimension_layout(snapshot, geometry, intents, quantity):
+    if isinstance(intents, DimensionPlan):
+        return _optimize_planned_layout(snapshot, geometry, intents, quantity)
     view = DrawingRect(47.0, 47.0, 343.0, 207.0)
     scale = _fit_scale(geometry.bounds[2], geometry.bounds[3], view)
     offset_x = view.left + ((view.right - view.left) - geometry.bounds[2] * scale) / 2.0
@@ -150,6 +154,134 @@ def optimize_dimension_layout(snapshot, geometry, intents, quantity):
         DrawingStatus.REVIEW_REQUIRED if unplaced else DrawingStatus.OK,
         0, tuple(unplaced),
     )
+
+
+def _optimize_planned_layout(snapshot, geometry, plan, quantity):
+    view = DrawingRect(47.0, 47.0, 343.0, 207.0)
+    scale = _fit_scale(geometry.bounds[2], geometry.bounds[3], view)
+    offset_x = view.left + ((view.right - view.left) - geometry.bounds[2] * scale) / 2.0
+    offset_y = view.top + ((view.bottom - view.top) + geometry.bounds[3] * scale) / 2.0
+    transform = ModelTransform(scale, offset_x, offset_y)
+    dimensions, texts, unplaced = [], [], []
+
+    for chain in sorted(plan.items, key=lambda item: (item.layer, item.chain_id)):
+        baseline = _chain_baseline(chain.side, chain.layer, view)
+        for segment in chain.segments:
+            placed = _place_planned_segment(chain.axis, segment, baseline, transform)
+            if _outside_page(placed.text_box) or _collides(placed.text_box, dimensions, texts):
+                unplaced.append(segment)
+            else:
+                dimensions.append(placed)
+
+    for callout in plan.callouts:
+        placed = _place_planned_callout(callout, transform)
+        if _outside_page(placed.text_box) or _collides(placed.text_box, dimensions, texts):
+            unplaced.append(callout)
+        else:
+            dimensions.append(placed)
+
+    note_index = 0
+    for intent in plan.passthrough_intents:
+        dimension, _, text = _place(intent, view, transform, note_index)
+        obstacle = dimension.text_box if dimension else text.box
+        if _outside_page(obstacle) or _collides(obstacle, dimensions, texts):
+            unplaced.append(intent)
+            continue
+        if dimension:
+            dimensions.append(dimension)
+        if text:
+            texts.append(text)
+        note_index += 1
+
+    return PartDrawingLayout(
+        PAGE_WIDTH,
+        PAGE_HEIGHT,
+        scale,
+        view,
+        transform,
+        tuple(dimensions),
+        (),
+        tuple(texts),
+        {
+            "part_position": snapshot.part_position,
+            "name": snapshot.name,
+            "material": snapshot.material,
+            "thickness": str(snapshot.thickness),
+            "quantity": str(quantity),
+            "scale": f"1:{1 / scale:g}",
+        },
+        DrawingStatus.REVIEW_REQUIRED if unplaced else DrawingStatus.OK,
+        0,
+        tuple(unplaced),
+    )
+
+
+def _chain_baseline(side, layer, view):
+    if side == PlanSide.BOTTOM:
+        return (view.left + view.right) / 2.0, view.bottom + 8.0 + layer * LAYER_SPACING_MM
+    if side == PlanSide.TOP:
+        return (view.left + view.right) / 2.0, view.top - 8.0 - layer * LAYER_SPACING_MM
+    if side == PlanSide.LEFT:
+        return view.left - 8.0 - layer * LAYER_SPACING_MM, (view.top + view.bottom) / 2.0
+    return view.right + 8.0 + layer * LAYER_SPACING_MM, (view.top + view.bottom) / 2.0
+
+
+def _place_planned_segment(axis, segment, baseline, transform):
+    points = (transform.point(segment.start), transform.point(segment.end))
+    horizontal = axis == Axis.X
+    if horizontal:
+        line_point = ((points[0][0] + points[1][0]) / 2.0, baseline[1])
+        rotation = 0.0
+        kind = PlacedDimensionKind.LINEAR_HORIZONTAL
+    else:
+        line_point = (baseline[0], (points[0][1] + points[1][1]) / 2.0)
+        rotation = 90.0
+        kind = PlacedDimensionKind.LINEAR_VERTICAL
+    text = PART_CAD_DIMENSION_STYLE_V1.format_measurement(segment.value_mm)
+    return PlacedDimension(
+        segment.segment_id,
+        kind,
+        points,
+        line_point,
+        segment.value_mm,
+        text,
+        rotation,
+        _dimension_text_box(line_point[0], line_point[1], text, 2.5, rotation),
+        evidence_codes=segment.evidence_codes,
+    )
+
+
+def _place_planned_callout(callout, transform):
+    center = transform.point(callout.center)
+    paper_radius = callout.diameter_mm * transform.scale / 2.0
+    x = center[0] + paper_radius + 12.0
+    y = center[1] - paper_radius - 8.0
+    return PlacedDimension(
+        callout.callout_id,
+        PlacedDimensionKind.DIAMETER,
+        (center,),
+        (x, y),
+        callout.diameter_mm,
+        callout.display_text,
+        0.0,
+        _dimension_text_box(x, y, callout.display_text, 2.5, 0.0),
+        paper_radius,
+        callout.evidence_codes,
+    )
+
+
+def _outside_page(box):
+    return (
+        box.left < 12
+        or box.right > PAGE_WIDTH - 12
+        or box.top < 12
+        or box.bottom >= TITLE_BLOCK_TOP
+    )
+
+
+def _collides(box, dimensions, texts):
+    existing = [item.text_box for item in dimensions] + [item.box for item in texts]
+    return any(box.intersects(item, 1.0) for item in existing)
 
 
 def _fit_scale(width, height, view):

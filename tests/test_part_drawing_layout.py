@@ -6,6 +6,7 @@ from pathlib import Path
 from zijinhua_tekla.part_drawing.contracts import HoleSnapshot, Point3D
 from zijinhua_tekla.part_drawing.dimension_generator import generate_dimension_intents
 from zijinhua_tekla.part_drawing.dimension_optimizer import optimize_dimension_layout
+from zijinhua_tekla.part_drawing.dimension_planner import plan_dimensions
 from zijinhua_tekla.part_drawing.feature_recognizer import recognize_plate_features
 from zijinhua_tekla.part_drawing.geometry_analyzer import Point2D, analyze_plate_geometry
 from zijinhua_tekla.part_drawing.snapshot_input import load_part_snapshot
@@ -106,6 +107,47 @@ class PartDrawingLayoutTests(unittest.TestCase):
         self.assertTrue(
             all(item.text_box.bottom < 242.0 for item in layout.placed_dimensions)
         )
+
+    def test_planned_feature_chain_is_inside_overall_chain(self):
+        snapshot = replace(
+            self.snapshot,
+            holes=tuple(
+                HoleSnapshot(
+                    f"H{index}",
+                    "ROUND",
+                    Point3D(10 + x, 20 + y, 30),
+                    diameter=22,
+                )
+                for index, (x, y) in enumerate(
+                    (
+                        (20, 25),
+                        (100, 25),
+                        (180, 25),
+                        (20, 75),
+                        (100, 75),
+                        (180, 75),
+                    ),
+                    1,
+                )
+            ),
+        )
+        geometry = analyze_plate_geometry(snapshot).geometry
+        features = recognize_plate_features(snapshot, geometry).features
+        intents = generate_dimension_intents(snapshot, geometry, features).intents
+        plan = plan_dimensions(geometry, features, intents)
+
+        layout = optimize_dimension_layout(snapshot, geometry, plan, quantity=1)
+        by_id = {item.dimension_id: item for item in layout.placed_dimensions}
+
+        self.assertLess(
+            by_id["hole-grid-x-1"].dimension_line_point[1],
+            by_id["overall-x"].dimension_line_point[1],
+        )
+        self.assertGreater(
+            by_id["hole-grid-y-1"].dimension_line_point[0],
+            by_id["overall-y"].dimension_line_point[0],
+        )
+        self.assertFalse(layout.unplaced_intents)
 
 
 if __name__ == "__main__":
