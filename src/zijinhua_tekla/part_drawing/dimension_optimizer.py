@@ -93,6 +93,7 @@ class PlacedDimension:
     text_box: DrawingRect
     paper_radius: float = 0.0
     evidence_codes: tuple[str, ...] = ()
+    source_feature_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -248,6 +249,7 @@ def _place_planned_segment(axis, segment, baseline, transform):
         rotation,
         _dimension_text_box(line_point[0], line_point[1], text, 2.5, rotation),
         evidence_codes=segment.evidence_codes,
+        source_feature_ids=segment.source_feature_ids,
     )
 
 
@@ -267,6 +269,7 @@ def _place_planned_callout(callout, transform):
         _dimension_text_box(x, y, callout.display_text, 2.5, 0.0),
         paper_radius,
         callout.evidence_codes,
+        callout.source_feature_ids,
     )
 
 

@@ -8,6 +8,7 @@ from typing import Any
 from .contracts import DrawingIssue, DrawingStatus, IssueCode
 from .dimension_generator import generate_dimension_intents
 from .dimension_optimizer import optimize_dimension_layout
+from .dimension_planner import plan_dimensions
 from .drawing_output import (
     PartDrawingRenderError,
     build_part_drawing_document,
@@ -93,20 +94,32 @@ def _process_group(
         group.geometry,
         feature_result.features,
     )
+    plan = plan_dimensions(
+        group.geometry,
+        feature_result.features,
+        dimension_result.intents,
+    )
     layout = optimize_dimension_layout(
         group.representative,
         group.geometry,
-        dimension_result.intents,
+        plan,
         group.quantity,
     )
     status = _aggregate_status(
         group.status,
         feature_result.status,
         dimension_result.status,
+        plan.status,
         layout.status,
     )
     layout_issues = _layout_issues(group, layout)
-    issues = group.issues + feature_result.issues + dimension_result.issues + layout_issues
+    issues = (
+        group.issues
+        + feature_result.issues
+        + dimension_result.issues
+        + plan.issues
+        + layout_issues
+    )
     document = build_part_drawing_document(
         group.representative,
         group.geometry,
@@ -173,9 +186,17 @@ def _layout_issues(group: PartPositionGroup, layout) -> tuple[DrawingIssue, ...]
             f"{len(layout.unplaced_intents)} annotations unplaced; {layout.collision_count} collisions",
             False,
             tuple(snapshot.part_id for snapshot in group.snapshots),
-            tuple(intent.intent_id for intent in layout.unplaced_intents),
+            tuple(_planned_item_id(item) for item in layout.unplaced_intents),
         ),
     )
+
+
+def _planned_item_id(item) -> str:
+    for name in ("segment_id", "callout_id", "intent_id"):
+        value = getattr(item, name, None)
+        if value:
+            return str(value)
+    return type(item).__name__
 
 
 def _write_issue_evidence(group: PartPositionGroup, output_root: Path, suffix: str) -> Path:

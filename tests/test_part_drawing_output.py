@@ -17,6 +17,7 @@ from zijinhua_tekla.part_drawing.contracts import (
 )
 from zijinhua_tekla.part_drawing.dimension_generator import generate_dimension_intents
 from zijinhua_tekla.part_drawing.dimension_optimizer import optimize_dimension_layout
+from zijinhua_tekla.part_drawing.dimension_planner import plan_dimensions
 from zijinhua_tekla.part_drawing.drawing_output import (
     PartDrawingRenderError,
     build_part_drawing_document,
@@ -156,6 +157,46 @@ class PartDrawingOutputTests(unittest.TestCase):
             dimensions = list(modelspace.query("DIMENSION"))
             self.assertEqual(5, len(dimensions))
             self.assertIn("DIA22", {entity.dxf.text for entity in dimensions})
+
+    def test_planned_hole_grid_renders_native_dimensions_with_provenance(self):
+        snapshot = replace(
+            self.snapshot,
+            holes=tuple(
+                HoleSnapshot(
+                    f"H{index}",
+                    "ROUND",
+                    Point3D(10 + x, 20 + y, 30),
+                    diameter=22,
+                )
+                for index, (x, y) in enumerate(
+                    ((20, 25), (100, 25), (180, 25), (20, 75), (100, 75), (180, 75)),
+                    1,
+                )
+            ),
+        )
+        geometry = analyze_plate_geometry(snapshot).geometry
+        features = recognize_plate_features(snapshot, geometry).features
+        intents = generate_dimension_intents(snapshot, geometry, features).intents
+        plan = plan_dimensions(geometry, features, intents)
+        layout = optimize_dimension_layout(snapshot, geometry, plan, quantity=1)
+        document = build_part_drawing_document(snapshot, geometry, features, layout, quantity=1)
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = render_part_drawing(document, Path(directory))
+            dxf = ezdxf.readfile(paths.dxf_path)
+            dimensions = list(dxf.modelspace().query("DIMENSION"))
+            payload = json.loads(paths.json_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(len(document.placed_dimensions), len(dimensions))
+            self.assertFalse(list(dxf.modelspace().query('LINE[layer=="DIMENSION"]')))
+            self.assertIn("6-DIA22", {item.dxf.text for item in dimensions})
+            self.assertTrue(all(item.dxf.dimstyle == "PART-CAD-V1" for item in dimensions))
+            callout = next(
+                item
+                for item in payload["placed_dimension_items"]
+                if item["dimension_id"] == "hole-grid-diameter"
+            )
+            self.assertEqual(["H1", "H2", "H3", "H4", "H5", "H6"], callout["source_feature_ids"])
 
     def test_chinese_pdf_text_requires_explicit_cjk_font(self):
         document = replace(

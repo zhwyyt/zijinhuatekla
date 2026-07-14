@@ -554,6 +554,17 @@ def _document_to_jsonable(document: PartDrawingDocument) -> dict[str, Any]:
         "placed_dimensions": [
             item.display_text for item in document.placed_dimensions
         ],
+        "placed_dimension_items": [
+            {
+                "dimension_id": item.dimension_id,
+                "kind": item.kind.value,
+                "display_text": item.display_text,
+                "measured_value_mm": item.measured_value_mm,
+                "source_feature_ids": list(item.source_feature_ids),
+                "evidence_codes": list(item.evidence_codes),
+            }
+            for item in document.placed_dimensions
+        ],
         "dimension_style": asdict(document.dimension_style),
         "entity_counts": _entity_counts(document),
         "issues": [
