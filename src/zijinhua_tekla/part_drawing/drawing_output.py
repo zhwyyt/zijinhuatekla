@@ -225,7 +225,7 @@ def _feature_primitives(feature: RecognizedFeature, transform: ModelTransform):
 
 def _resolve_pdf_font(document: PartDrawingDocument, cjk_font_path: Path | None) -> str:
     texts = document.annotation_texts() + list(document.title_fields.values())
-    if not any(any(ord(char) > 127 for char in text) for text in texts):
+    if not _requires_cjk_font(texts):
         return "Helvetica"
     if cjk_font_path is None or not cjk_font_path.is_file():
         raise PartDrawingRenderError("CJK font is required for non-ASCII PDF text")
@@ -234,6 +234,15 @@ def _resolve_pdf_font(document: PartDrawingDocument, cjk_font_path: Path | None)
     except Exception as exc:
         raise PartDrawingRenderError(f"CJK font cannot be loaded: {exc}") from exc
     return "PartDrawingCJK"
+
+
+def _requires_cjk_font(texts) -> bool:
+    for text in texts:
+        try:
+            text.encode("cp1252")
+        except UnicodeEncodeError:
+            return True
+    return False
 
 
 def _render_dxf(document: PartDrawingDocument, path: Path) -> None:

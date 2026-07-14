@@ -189,7 +189,7 @@ class PartDrawingOutputTests(unittest.TestCase):
 
             self.assertEqual(len(document.placed_dimensions), len(dimensions))
             self.assertFalse(list(dxf.modelspace().query('LINE[layer=="DIMENSION"]')))
-            self.assertIn("6-DIA22", {item.dxf.text for item in dimensions})
+            self.assertIn("6-\u00d822", {item.dxf.text for item in dimensions})
             self.assertTrue(all(item.dxf.dimstyle == "PART-CAD-V1" for item in dimensions))
             callout = next(
                 item

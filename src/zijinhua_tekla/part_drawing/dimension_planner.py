@@ -136,7 +136,7 @@ def plan_dimensions(
         "hole-grid-diameter",
         holes[0].anchors[0],
         diameter,
-        f"{len(holes)}-DIA{_number(diameter)}",
+        f"{len(holes)}-\u00d8{_number(diameter)}",
         hole_ids,
         ("COMPLETE_RECTANGULAR_HOLE_GRID", "EQUAL_DIAMETER"),
     )
@@ -277,14 +277,14 @@ def _checked_plan(plan):
 
 
 def _complete_round_hole_grid(holes):
-    if len(holes) < 4:
+    if len(holes) < 2:
         return None
     diameters = [float(item.parameters["diameter"]) for item in holes]
     if max(diameters) - min(diameters) > GRID_TOLERANCE_MM:
         return None
     x_values = _clustered(item.anchors[0].x for item in holes)
     y_values = _clustered(item.anchors[0].y for item in holes)
-    if len(x_values) < 2 or len(y_values) < 2:
+    if len(x_values) < 2 and len(y_values) < 2:
         return None
     occupied = {
         (_nearest(item.anchors[0].x, x_values), _nearest(item.anchors[0].y, y_values))

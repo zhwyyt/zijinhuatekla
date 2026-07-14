@@ -49,7 +49,7 @@ class PartDrawingDimensionPlannerTests(unittest.TestCase):
             (25.0, 50.0, 25.0),
             tuple(segment.value_mm for segment in by_axis[Axis.Y].segments),
         )
-        self.assertEqual("6-DIA22", plan.callouts[0].display_text)
+        self.assertEqual("6-\u00d822", plan.callouts[0].display_text)
         self.assertFalse(plan.unresolved_intents)
 
     def test_missing_cartesian_cell_is_not_planned_as_complete_grid(self):
@@ -60,6 +60,23 @@ class PartDrawingDimensionPlannerTests(unittest.TestCase):
         )
         self.assertEqual("REVIEW_REQUIRED", plan.status.value)
         self.assertTrue(plan.unresolved_intents)
+
+    def test_single_row_hole_group_keeps_edge_and_spacing_chain(self):
+        plan = _planned(((20, 50), (100, 50), (180, 50)))
+        feature_chains = [
+            item for item in plan.items if item.kind == PlanItemKind.FEATURE_CHAIN
+        ]
+        by_axis = {item.axis: item for item in feature_chains}
+
+        self.assertEqual(
+            (20.0, 80.0, 80.0, 20.0),
+            tuple(segment.value_mm for segment in by_axis[Axis.X].segments),
+        )
+        self.assertEqual(
+            (50.0, 50.0),
+            tuple(segment.value_mm for segment in by_axis[Axis.Y].segments),
+        )
+        self.assertEqual("OK", plan.status.value)
 
     def test_overall_dimensions_are_outside_feature_chains(self):
         plan = _planned(
