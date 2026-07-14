@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +13,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 
 from .contracts import DrawingIssue, DrawingStatus, PartDrawingSnapshot
+from .dimension_style import CadDimensionStyle, PART_CAD_DIMENSION_STYLE_V1
 from .dimension_optimizer import (
     DrawingArc,
     DrawingCircle,
@@ -20,6 +21,7 @@ from .dimension_optimizer import (
     DrawingText,
     ModelTransform,
     PartDrawingLayout,
+    PlacedDimension,
 )
 from .feature_recognizer import FeatureType, RecognizedFeature
 from .geometry_analyzer import NormalizedPlateGeometry, NormalizedSegment, Point2D
@@ -54,13 +56,18 @@ class PartDrawingDocument:
     recognized_feature_ids: tuple[str, ...]
     contour_segments: tuple[DrawingLine | DrawingArc, ...]
     inner_segments: tuple[DrawingLine | DrawingArc | DrawingCircle, ...]
+    placed_dimensions: tuple[PlacedDimension, ...]
+    dimension_style: CadDimensionStyle
     annotation_lines: tuple[DrawingLine, ...]
     annotation_text_items: tuple[DrawingText, ...]
     title_fields: dict[str, str]
     issues: tuple[DrawingIssue, ...]
 
     def annotation_texts(self) -> list[str]:
-        return [item.text for item in self.annotation_text_items]
+        return (
+            [item.display_text for item in self.placed_dimensions]
+            + [item.text for item in self.annotation_text_items]
+        )
 
 
 @dataclass(frozen=True)
@@ -124,6 +131,8 @@ def build_part_drawing_document(
         recognized_feature_ids=tuple(feature.feature_id for feature in features),
         contour_segments=contour_segments,
         inner_segments=inner_segments,
+        placed_dimensions=layout.placed_dimensions,
+        dimension_style=PART_CAD_DIMENSION_STYLE_V1,
         annotation_lines=layout.annotation_lines,
         annotation_text_items=layout.annotation_texts,
         title_fields=layout.title_fields,
@@ -303,6 +312,10 @@ def _document_to_jsonable(document: PartDrawingDocument) -> dict[str, Any]:
         "tolerances": document.tolerances,
         "recognized_feature_ids": list(document.recognized_feature_ids),
         "annotation_texts": document.annotation_texts(),
+        "placed_dimensions": [
+            item.display_text for item in document.placed_dimensions
+        ],
+        "dimension_style": asdict(document.dimension_style),
         "entity_counts": _entity_counts(document),
         "issues": [
             {"code": item.code.value, "message": item.message, "blocking": item.blocking, "part_ids": list(item.part_ids), "evidence": list(item.evidence)}
@@ -317,5 +330,6 @@ def _entity_counts(document: PartDrawingDocument) -> dict[str, int]:
         "lines": sum(isinstance(item, DrawingLine) for item in primitives),
         "arcs": sum(isinstance(item, DrawingArc) for item in primitives),
         "circles": sum(isinstance(item, DrawingCircle) for item in primitives),
+        "dimensions": len(document.placed_dimensions),
         "texts": len(document.annotation_text_items) + len(document.title_fields),
     }

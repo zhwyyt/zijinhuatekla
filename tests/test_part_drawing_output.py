@@ -44,6 +44,11 @@ class PartDrawingOutputTests(unittest.TestCase):
         )
 
     def test_writes_dxf_pdf_and_json_from_one_document(self):
+        self.assertEqual(2, len(self.document.placed_dimensions))
+        self.assertEqual(
+            "partCadDimensionStyle.v1",
+            self.document.dimension_style.style_id,
+        )
         with tempfile.TemporaryDirectory() as directory:
             paths = render_part_drawing(self.document, Path(directory))
             self.assertTrue(paths.dxf_path.exists())
@@ -57,6 +62,15 @@ class PartDrawingOutputTests(unittest.TestCase):
             self.assertEqual("partDrawingSnapshot.v1", payload["source"]["schema_version"])
             self.assertEqual("partDrawingRules.v1", payload["rule_version"])
             self.assertIn("geometry_match_mm", payload["tolerances"])
+            self.assertEqual(
+                [item.display_text for item in self.document.placed_dimensions],
+                payload["placed_dimensions"],
+            )
+            self.assertEqual(
+                "partCadDimensionStyle.v1",
+                payload["dimension_style"]["style_id"],
+            )
+            self.assertEqual(2, payload["entity_counts"]["dimensions"])
             self.assertGreater(paths.pdf_path.stat().st_size, 1000)
             pdf = PdfReader(str(paths.pdf_path))
             self.assertEqual(1, len(pdf.pages))
