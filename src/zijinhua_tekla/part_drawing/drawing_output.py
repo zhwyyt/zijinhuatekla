@@ -358,6 +358,8 @@ def _render_pdf(document: PartDrawingDocument, path: Path, font_name: str) -> No
     pdf.setLineWidth(0.25 * mm)
     for primitive in document.contour_segments + document.inner_segments + document.annotation_lines:
         _add_pdf_primitive(pdf, document, primitive)
+    for dimension in document.placed_dimensions:
+        _draw_pdf_dimension(pdf, document, dimension, font_name)
     for item in document.annotation_text_items:
         _pdf_text(pdf, document, item.x, item.y, item.text, item.height, font_name)
     pdf.line(12 * mm, (document.page_height - 242) * mm, 408 * mm, (document.page_height - 242) * mm)
@@ -381,6 +383,153 @@ def _add_pdf_primitive(pdf, document, primitive) -> None:
         top = (document.page_height - primitive.cy + primitive.radius) * mm
         extent = (primitive.end_angle - primitive.start_angle) % 360
         pdf.arc(left, bottom, right, top, startAng=-primitive.end_angle, extent=extent)
+
+
+def _draw_pdf_dimension(pdf, document, dimension, font_name) -> None:
+    style = document.dimension_style
+    if dimension.kind in {
+        PlacedDimensionKind.LINEAR_HORIZONTAL,
+        PlacedDimensionKind.LINEAR_VERTICAL,
+    }:
+        _draw_pdf_linear_dimension(pdf, document, dimension, style, font_name)
+    else:
+        _draw_pdf_radial_dimension(pdf, document, dimension, style, font_name)
+
+
+def _draw_pdf_linear_dimension(pdf, document, dimension, style, font_name) -> None:
+    vertical = dimension.kind == PlacedDimensionKind.LINEAR_VERTICAL
+    p1, p2 = dimension.source_points
+    base = dimension.dimension_line_point
+    axis = 1 if vertical else 0
+    cross = 0 if vertical else 1
+    line_cross = base[cross]
+    for point in (p1, p2):
+        direction = 1.0 if line_cross >= point[cross] else -1.0
+        start = list(point)
+        end = list(point)
+        start[cross] += direction * style.extension_offset_mm
+        end[cross] = line_cross + direction * style.extension_beyond_mm
+        _pdf_line(pdf, document, tuple(start), tuple(end))
+    first = [p1[0], p1[1]]
+    second = [p2[0], p2[1]]
+    first[cross] = line_cross
+    second[cross] = line_cross
+    _draw_pdf_dimension_line_with_text_gap(
+        pdf,
+        document,
+        tuple(first),
+        tuple(second),
+        dimension.text_box,
+        vertical,
+        style.text_gap_mm,
+    )
+    _draw_pdf_oblique_tick(pdf, document, tuple(first), style.arrow_size_mm)
+    _draw_pdf_oblique_tick(pdf, document, tuple(second), style.arrow_size_mm)
+    _pdf_dimension_text(pdf, document, dimension, style, font_name)
+
+
+def _draw_pdf_radial_dimension(pdf, document, dimension, style, font_name) -> None:
+    center = dimension.source_points[0]
+    location = dimension.dimension_line_point
+    dx, dy = location[0] - center[0], location[1] - center[1]
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        raise PartDrawingRenderError("radial dimension leader has zero length")
+    edge = (
+        center[0] + dx / length * dimension.paper_radius,
+        center[1] + dy / length * dimension.paper_radius,
+    )
+    _pdf_line(pdf, document, edge, location)
+    _draw_pdf_filled_arrow(pdf, document, edge, location, style.arrow_size_mm)
+    _pdf_dimension_text(pdf, document, dimension, style, font_name)
+
+
+def _pdf_line(pdf, document, start, end) -> None:
+    pdf.line(
+        start[0] * mm,
+        (document.page_height - start[1]) * mm,
+        end[0] * mm,
+        (document.page_height - end[1]) * mm,
+    )
+
+
+def _draw_pdf_dimension_line_with_text_gap(
+    pdf,
+    document,
+    first,
+    second,
+    box,
+    vertical,
+    gap,
+) -> None:
+    axis = 1 if vertical else 0
+    cross = 0 if vertical else 1
+    low, high = sorted((first[axis], second[axis]))
+    gap_low = (box.top if vertical else box.left) - gap
+    gap_high = (box.bottom if vertical else box.right) + gap
+    fixed = first[cross]
+    if low < gap_low:
+        start = [fixed, fixed]
+        end = [fixed, fixed]
+        start[axis], start[cross] = low, fixed
+        end[axis], end[cross] = min(gap_low, high), fixed
+        _pdf_line(pdf, document, tuple(start), tuple(end))
+    if gap_high < high:
+        start = [fixed, fixed]
+        end = [fixed, fixed]
+        start[axis], start[cross] = max(gap_high, low), fixed
+        end[axis], end[cross] = high, fixed
+        _pdf_line(pdf, document, tuple(start), tuple(end))
+
+
+def _draw_pdf_oblique_tick(pdf, document, point, size) -> None:
+    half = size / math.sqrt(2.0)
+    _pdf_line(
+        pdf,
+        document,
+        (point[0] - half, point[1] + half),
+        (point[0] + half, point[1] - half),
+    )
+
+
+def _draw_pdf_filled_arrow(pdf, document, tip, tail, size) -> None:
+    dx, dy = tail[0] - tip[0], tail[1] - tip[1]
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        raise PartDrawingRenderError("radial dimension leader has zero length")
+    ux, uy = dx / length, dy / length
+    px, py = -uy, ux
+    base = (tip[0] + ux * size, tip[1] + uy * size)
+    half_width = size / 2.0
+    left = (base[0] + px * half_width, base[1] + py * half_width)
+    right = (base[0] - px * half_width, base[1] - py * half_width)
+    path = pdf.beginPath()
+    path.moveTo(tip[0] * mm, (document.page_height - tip[1]) * mm)
+    path.lineTo(left[0] * mm, (document.page_height - left[1]) * mm)
+    path.lineTo(right[0] * mm, (document.page_height - right[1]) * mm)
+    path.close()
+    pdf.drawPath(path, stroke=1, fill=1)
+
+
+def _pdf_dimension_text(pdf, document, dimension, style, font_name) -> None:
+    pdf.saveState()
+    pdf.translate(
+        dimension.dimension_line_point[0] * mm,
+        (document.page_height - dimension.dimension_line_point[1]) * mm,
+    )
+    pdf.rotate(dimension.text_rotation)
+    text = pdf.beginText()
+    text.setFont(font_name, style.text_height_mm * mm)
+    text.setHorizScale(style.text_width_factor * 100.0)
+    width = pdfmetrics.stringWidth(
+        dimension.display_text,
+        font_name,
+        style.text_height_mm * mm,
+    ) * style.text_width_factor
+    text.setTextOrigin(-width / 2.0, style.text_gap_mm * mm)
+    text.textOut(dimension.display_text)
+    pdf.drawText(text)
+    pdf.restoreState()
 
 
 def _pdf_text(pdf, document, x, y, text, height, font_name) -> None:

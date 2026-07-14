@@ -3,10 +3,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import ezdxf
 from pypdf import PdfReader
 
+from zijinhua_tekla.part_drawing import drawing_output
 from zijinhua_tekla.part_drawing.contracts import (
     ContourSegmentSnapshot,
     DrawingStatus,
@@ -98,7 +100,21 @@ class PartDrawingOutputTests(unittest.TestCase):
             self.assertGreater(paths.pdf_path.stat().st_size, 1000)
             pdf = PdfReader(str(paths.pdf_path))
             self.assertEqual(1, len(pdf.pages))
-            self.assertIn("P-1001", pdf.pages[0].extract_text())
+            page_text = pdf.pages[0].extract_text()
+            self.assertIn("P-1001", page_text)
+            self.assertIn("200", page_text)
+            self.assertIn("100", page_text)
+
+    def test_pdf_renderer_consumes_each_shared_placed_dimension(self):
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "zijinhua_tekla.part_drawing.drawing_output._draw_pdf_dimension",
+            wraps=drawing_output._draw_pdf_dimension,
+        ) as draw_dimension:
+            render_part_drawing(self.document, Path(directory))
+            self.assertEqual(
+                len(self.document.placed_dimensions),
+                draw_dimension.call_count,
+            )
 
     def test_renderer_does_not_emit_files_for_rejected_document(self):
         document = replace(self.document, status=DrawingStatus.REJECTED)
