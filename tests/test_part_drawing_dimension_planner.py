@@ -49,7 +49,7 @@ class PartDrawingDimensionPlannerTests(unittest.TestCase):
             (25.0, 50.0, 25.0),
             tuple(segment.value_mm for segment in by_axis[Axis.Y].segments),
         )
-        self.assertEqual("6-\u00d822", plan.callouts[0].display_text)
+        self.assertEqual("6\u03a622", plan.callouts[0].display_text)
         self.assertFalse(plan.unresolved_intents)
 
     def test_missing_cartesian_cell_is_not_planned_as_complete_grid(self):
@@ -112,7 +112,7 @@ class PartDrawingDimensionPlannerTests(unittest.TestCase):
             item for item in plan.items if item.kind == PlanItemKind.FEATURE_CHAIN
         ]
         self.assertEqual(2, len(feature_chains))
-        self.assertEqual("DIA22", plan.callouts[0].display_text)
+        self.assertEqual("\u03a622", plan.callouts[0].display_text)
         self.assertFalse(plan.unresolved_intents)
 
 

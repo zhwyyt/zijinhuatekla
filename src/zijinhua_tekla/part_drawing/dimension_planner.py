@@ -136,7 +136,7 @@ def plan_dimensions(
         "hole-grid-diameter",
         holes[0].anchors[0],
         diameter,
-        f"{len(holes)}-\u00d8{_number(diameter)}",
+        f"{len(holes)}\u03a6{_number(diameter)}",
         hole_ids,
         ("COMPLETE_RECTANGULAR_HOLE_GRID", "EQUAL_DIAMETER"),
     )
@@ -249,7 +249,7 @@ def _single_or_no_hole_plan(
                 "single-hole-diameter",
                 center,
                 diameter,
-                f"DIA{_number(diameter)}",
+                f"\u03a6{_number(diameter)}",
                 (hole.feature_id,),
                 ("TEKLA_HOLE_OPERATION",),
             ),

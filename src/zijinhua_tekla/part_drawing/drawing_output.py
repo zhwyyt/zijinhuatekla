@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import ezdxf
+from ezdxf.math import Vec2
 from ezdxf.render.arrows import ARROWS
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -22,6 +23,7 @@ from .dimension_optimizer import (
     DrawingText,
     ModelTransform,
     PartDrawingLayout,
+    PlacedCallout,
     PlacedDimension,
     PlacedDimensionKind,
 )
@@ -42,6 +44,7 @@ LAYERS = {
 
 DXF_DIMSTYLE_NAME = "PART-CAD-V1"
 DXF_DIMTEXT_STYLE_NAME = "TArial"
+DXF_MLEADER_STYLE_NAME = "PART-CALLOUT-V1"
 
 
 @dataclass(frozen=True)
@@ -62,6 +65,7 @@ class PartDrawingDocument:
     contour_segments: tuple[DrawingLine | DrawingArc, ...]
     inner_segments: tuple[DrawingLine | DrawingArc | DrawingCircle, ...]
     placed_dimensions: tuple[PlacedDimension, ...]
+    placed_callouts: tuple[PlacedCallout, ...]
     dimension_style: CadDimensionStyle
     annotation_lines: tuple[DrawingLine, ...]
     annotation_text_items: tuple[DrawingText, ...]
@@ -71,6 +75,7 @@ class PartDrawingDocument:
     def annotation_texts(self) -> list[str]:
         return (
             [item.display_text for item in self.placed_dimensions]
+            + [item.display_text for item in self.placed_callouts]
             + [item.text for item in self.annotation_text_items]
         )
 
@@ -110,6 +115,12 @@ def build_part_drawing_document(
         if feature.feature_type in {FeatureType.ROUND_HOLE, FeatureType.SLOT}
         for primitive in _feature_primitives(feature, layout.model_transform)
     )
+    center_lines = tuple(
+        line
+        for feature in features
+        if feature.feature_type == FeatureType.ROUND_HOLE
+        for line in _round_hole_center_lines(feature, layout.model_transform)
+    )
     return PartDrawingDocument(
         schema_version="partDrawingDocument.v1",
         rule_version="partDrawingRules.v1",
@@ -137,8 +148,9 @@ def build_part_drawing_document(
         contour_segments=contour_segments,
         inner_segments=inner_segments,
         placed_dimensions=layout.placed_dimensions,
+        placed_callouts=layout.placed_callouts,
         dimension_style=PART_CAD_DIMENSION_STYLE_V1,
-        annotation_lines=layout.annotation_lines,
+        annotation_lines=layout.annotation_lines + center_lines,
         annotation_text_items=layout.annotation_texts,
         title_fields=layout.title_fields,
         issues=issues,
@@ -223,6 +235,16 @@ def _feature_primitives(feature: RecognizedFeature, transform: ModelTransform):
     )
 
 
+def _round_hole_center_lines(feature: RecognizedFeature, transform: ModelTransform):
+    center = transform.point(feature.anchors[0])
+    radius = float(feature.parameters["diameter"]) * transform.scale / 2.0
+    extent = radius + 2.0
+    return (
+        DrawingLine(center[0] - extent, center[1], center[0] + extent, center[1], "PART_CENTER"),
+        DrawingLine(center[0], center[1] - extent, center[0], center[1] + extent, "PART_CENTER"),
+    )
+
+
 def _resolve_pdf_font(document: PartDrawingDocument, cjk_font_path: Path | None) -> str:
     texts = document.annotation_texts() + list(document.title_fields.values())
     if not _requires_cjk_font(texts):
@@ -251,6 +273,7 @@ def _render_dxf(document: PartDrawingDocument, path: Path) -> None:
         if name not in dxf.layers:
             dxf.layers.add(name, color=color)
     _ensure_dxf_dimension_style(dxf, document)
+    _ensure_dxf_mleader_style(dxf, document)
     modelspace = dxf.modelspace()
     for primitive in document.contour_segments + document.inner_segments + document.annotation_lines:
         _add_dxf_primitive(modelspace, primitive)
@@ -258,6 +281,8 @@ def _render_dxf(document: PartDrawingDocument, path: Path) -> None:
         modelspace.add_text(item.text, dxfattribs={"insert": (item.x, item.y), "height": item.height, "layer": item.layer})
     for dimension in document.placed_dimensions:
         _add_dxf_dimension(modelspace, document, dimension)
+    for callout in document.placed_callouts:
+        _add_dxf_callout(modelspace, callout)
     _add_dxf_title(modelspace, document)
     dxf.saveas(path)
     audit = ezdxf.readfile(path).audit()
@@ -292,6 +317,32 @@ def _ensure_dxf_dimension_style(dxf, document) -> None:
     dimstyle.set_arrows(
         blk=style.linear_arrow_name,
         ldrblk=style.leader_arrow_name,
+    )
+
+
+def _ensure_dxf_mleader_style(dxf, document) -> None:
+    if DXF_MLEADER_STYLE_NAME in dxf.mleader_styles:
+        style = dxf.mleader_styles.get(DXF_MLEADER_STYLE_NAME)
+    else:
+        style = dxf.mleader_styles.new(DXF_MLEADER_STYLE_NAME)
+    style.dxf.char_height = document.dimension_style.text_height_mm
+    style.dxf.arrow_head_size = document.dimension_style.arrow_size_mm
+    style.dxf.landing_gap_size = document.dimension_style.text_gap_mm
+    style.dxf.dogleg_length = 4.0
+    style.dxf.text_style_handle = dxf.styles.get(DXF_DIMTEXT_STYLE_NAME).dxf.handle
+
+
+def _add_dxf_callout(modelspace, callout) -> None:
+    builder = modelspace.add_multileader_mtext(
+        style=DXF_MLEADER_STYLE_NAME,
+        dxfattribs={"layer": "ANNOTATION"},
+    )
+    target = Vec2(callout.target_point)
+    text_point = Vec2(callout.text_point)
+    builder.quick_leader(
+        callout.display_text,
+        target=target,
+        segment1=text_point - target,
     )
 
 
@@ -369,6 +420,8 @@ def _render_pdf(document: PartDrawingDocument, path: Path, font_name: str) -> No
         _add_pdf_primitive(pdf, document, primitive)
     for dimension in document.placed_dimensions:
         _draw_pdf_dimension(pdf, document, dimension, font_name)
+    for callout in document.placed_callouts:
+        _draw_pdf_callout(pdf, document, callout, font_name)
     for item in document.annotation_text_items:
         _pdf_text(pdf, document, item.x, item.y, item.text, item.height, font_name)
     pdf.line(12 * mm, (document.page_height - 242) * mm, 408 * mm, (document.page_height - 242) * mm)
@@ -451,6 +504,26 @@ def _draw_pdf_radial_dimension(pdf, document, dimension, style, font_name) -> No
     _pdf_line(pdf, document, edge, location)
     _draw_pdf_filled_arrow(pdf, document, edge, location, style.arrow_size_mm)
     _pdf_dimension_text(pdf, document, dimension, style, font_name)
+
+
+def _draw_pdf_callout(pdf, document, callout, font_name) -> None:
+    _pdf_line(pdf, document, callout.target_point, callout.text_point)
+    _draw_pdf_filled_arrow(
+        pdf,
+        document,
+        callout.target_point,
+        callout.text_point,
+        document.dimension_style.arrow_size_mm,
+    )
+    _pdf_text(
+        pdf,
+        document,
+        callout.text_point[0],
+        callout.text_point[1],
+        callout.display_text,
+        document.dimension_style.text_height_mm,
+        font_name,
+    )
 
 
 def _pdf_line(pdf, document, start, end) -> None:
@@ -563,6 +636,17 @@ def _document_to_jsonable(document: PartDrawingDocument) -> dict[str, Any]:
         "placed_dimensions": [
             item.display_text for item in document.placed_dimensions
         ],
+        "placed_callout_items": [
+            {
+                "callout_id": item.callout_id,
+                "display_text": item.display_text,
+                "target_point": list(item.target_point),
+                "text_point": list(item.text_point),
+                "source_feature_ids": list(item.source_feature_ids),
+                "evidence_codes": list(item.evidence_codes),
+            }
+            for item in document.placed_callouts
+        ],
         "placed_dimension_items": [
             {
                 "dimension_id": item.dimension_id,
@@ -590,5 +674,6 @@ def _entity_counts(document: PartDrawingDocument) -> dict[str, int]:
         "arcs": sum(isinstance(item, DrawingArc) for item in primitives),
         "circles": sum(isinstance(item, DrawingCircle) for item in primitives),
         "dimensions": len(document.placed_dimensions),
+        "callouts": len(document.placed_callouts),
         "texts": len(document.annotation_text_items) + len(document.title_fields),
     }

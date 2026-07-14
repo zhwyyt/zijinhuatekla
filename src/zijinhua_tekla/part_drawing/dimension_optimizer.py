@@ -97,6 +97,17 @@ class PlacedDimension:
 
 
 @dataclass(frozen=True)
+class PlacedCallout:
+    callout_id: str
+    target_point: tuple[float, float]
+    text_point: tuple[float, float]
+    display_text: str
+    text_box: DrawingRect
+    source_feature_ids: tuple[str, ...] = ()
+    evidence_codes: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PartDrawingLayout:
     page_width: float
     page_height: float
@@ -104,6 +115,7 @@ class PartDrawingLayout:
     view_rect: DrawingRect
     model_transform: ModelTransform
     placed_dimensions: tuple[PlacedDimension, ...]
+    placed_callouts: tuple[PlacedCallout, ...]
     annotation_lines: tuple[DrawingLine, ...]
     annotation_texts: tuple[DrawingText, ...]
     title_fields: dict[str, str]
@@ -150,7 +162,7 @@ def optimize_dimension_layout(snapshot, geometry, intents, quantity):
             texts.append(text)
         counts[band] = counts.get(band, 0) + 1
     return PartDrawingLayout(
-        PAGE_WIDTH, PAGE_HEIGHT, scale, view, transform, tuple(dimensions), tuple(lines), tuple(texts),
+        PAGE_WIDTH, PAGE_HEIGHT, scale, view, transform, tuple(dimensions), (), tuple(lines), tuple(texts),
         {"part_position": snapshot.part_position, "name": snapshot.name, "material": snapshot.material, "thickness": str(snapshot.thickness), "quantity": str(quantity), "scale": f"1:{1 / scale:g}"},
         DrawingStatus.REVIEW_REQUIRED if unplaced else DrawingStatus.OK,
         0, tuple(unplaced),
@@ -163,29 +175,31 @@ def _optimize_planned_layout(snapshot, geometry, plan, quantity):
     offset_x = view.left + ((view.right - view.left) - geometry.bounds[2] * scale) / 2.0
     offset_y = view.top + ((view.bottom - view.top) + geometry.bounds[3] * scale) / 2.0
     transform = ModelTransform(scale, offset_x, offset_y)
-    dimensions, texts, unplaced = [], [], []
+    dimensions, callouts, texts, unplaced = [], [], [], []
 
     for chain in sorted(plan.items, key=lambda item: (item.layer, item.chain_id)):
         baseline = _chain_baseline(chain.side, chain.layer, view)
         for segment in chain.segments:
             placed = _place_planned_segment(chain.axis, segment, baseline, transform)
-            if _outside_page(placed.text_box) or _collides(placed.text_box, dimensions, texts):
+            if _outside_page(placed.text_box) or _collides(
+                placed.text_box, dimensions, callouts, texts
+            ):
                 unplaced.append(segment)
             else:
                 dimensions.append(placed)
 
     for callout in plan.callouts:
         placed = _place_planned_callout(callout, transform)
-        if _outside_page(placed.text_box) or _collides(placed.text_box, dimensions, texts):
+        if _outside_page(placed.text_box) or _collides(placed.text_box, dimensions, callouts, texts):
             unplaced.append(callout)
         else:
-            dimensions.append(placed)
+            callouts.append(placed)
 
     note_index = 0
     for intent in plan.passthrough_intents:
         dimension, _, text = _place(intent, view, transform, note_index)
         obstacle = dimension.text_box if dimension else text.box
-        if _outside_page(obstacle) or _collides(obstacle, dimensions, texts):
+        if _outside_page(obstacle) or _collides(obstacle, dimensions, callouts, texts):
             unplaced.append(intent)
             continue
         if dimension:
@@ -201,6 +215,7 @@ def _optimize_planned_layout(snapshot, geometry, plan, quantity):
         view,
         transform,
         tuple(dimensions),
+        tuple(callouts),
         (),
         tuple(texts),
         {
@@ -258,18 +273,20 @@ def _place_planned_callout(callout, transform):
     paper_radius = callout.diameter_mm * transform.scale / 2.0
     x = center[0] + paper_radius + 12.0
     y = center[1] - paper_radius - 8.0
-    return PlacedDimension(
+    dx, dy = x - center[0], y - center[1]
+    length = (dx * dx + dy * dy) ** 0.5
+    target = (
+        center[0] + dx / length * paper_radius,
+        center[1] + dy / length * paper_radius,
+    )
+    return PlacedCallout(
         callout.callout_id,
-        PlacedDimensionKind.DIAMETER,
-        (center,),
+        target,
         (x, y),
-        callout.diameter_mm,
         callout.display_text,
-        0.0,
         _dimension_text_box(x, y, callout.display_text, 2.5, 0.0),
-        paper_radius,
-        callout.evidence_codes,
         callout.source_feature_ids,
+        callout.evidence_codes,
     )
 
 
@@ -282,8 +299,12 @@ def _outside_page(box):
     )
 
 
-def _collides(box, dimensions, texts):
-    existing = [item.text_box for item in dimensions] + [item.box for item in texts]
+def _collides(box, dimensions, callouts, texts):
+    existing = (
+        [item.text_box for item in dimensions]
+        + [item.text_box for item in callouts]
+        + [item.box for item in texts]
+    )
     return any(box.intersects(item, 1.0) for item in existing)
 
 

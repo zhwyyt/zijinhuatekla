@@ -10,6 +10,7 @@ from zijinhua_tekla.part_drawing.pipeline import run_part_drawing_batch
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "part_drawing" / "rectangular_plate.json"
+CJK_FONT = Path("C:/Windows/Fonts/simhei.ttf")
 
 
 class PartDrawingPipelineTests(unittest.TestCase):
@@ -19,7 +20,9 @@ class PartDrawingPipelineTests(unittest.TestCase):
             snapshot_root = root / "snapshots"
             snapshot_root.mkdir()
             shutil.copy2(FIXTURE, snapshot_root / FIXTURE.name)
-            result = run_part_drawing_batch(snapshot_root, root / "out")
+            result = run_part_drawing_batch(
+                snapshot_root, root / "out", cjk_font_path=CJK_FONT
+            )
             self.assertEqual(1, result.ok_count)
             self.assertEqual(0, result.rejected_count)
             self.assertTrue((root / "out" / "parts" / "P-1001" / "P-1001.dxf").exists())
@@ -91,7 +94,9 @@ class PartDrawingPipelineTests(unittest.TestCase):
                 json.dumps(data), encoding="utf-8"
             )
 
-            result = run_part_drawing_batch(snapshot_root, root / "out")
+            result = run_part_drawing_batch(
+                snapshot_root, root / "out", cjk_font_path=CJK_FONT
+            )
             item = result.items[0]
 
             self.assertEqual(DrawingStatus.OK, item.status)

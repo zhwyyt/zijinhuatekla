@@ -29,6 +29,7 @@ from zijinhua_tekla.part_drawing.snapshot_input import load_part_snapshot
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "part_drawing" / "rectangular_plate.json"
+CJK_FONT = Path("C:/Windows/Fonts/simhei.ttf")
 
 
 class PartDrawingOutputTests(unittest.TestCase):
@@ -146,17 +147,20 @@ class PartDrawingOutputTests(unittest.TestCase):
         geometry = analyze_plate_geometry(snapshot).geometry
         features = recognize_plate_features(snapshot, geometry).features
         intents = generate_dimension_intents(snapshot, geometry, features).intents
-        layout = optimize_dimension_layout(snapshot, geometry, intents, quantity=1)
+        plan = plan_dimensions(geometry, features, intents)
+        layout = optimize_dimension_layout(snapshot, geometry, plan, quantity=1)
         document = build_part_drawing_document(snapshot, geometry, features, layout, quantity=1)
         self.assertTrue(any(item.__class__.__name__ == "DrawingCircle" for item in document.inner_segments))
+        center_lines = [item for item in document.annotation_lines if item.layer == "PART_CENTER"]
+        self.assertEqual(2, len(center_lines))
         with tempfile.TemporaryDirectory() as directory:
-            paths = render_part_drawing(document, Path(directory))
+            paths = render_part_drawing(document, Path(directory), cjk_font_path=CJK_FONT)
             modelspace = ezdxf.readfile(paths.dxf_path).modelspace()
             entities = list(modelspace.query("CIRCLE"))
             self.assertEqual(1, len(entities))
             dimensions = list(modelspace.query("DIMENSION"))
-            self.assertEqual(5, len(dimensions))
-            self.assertIn("DIA22", {entity.dxf.text for entity in dimensions})
+            self.assertEqual(4, len(dimensions))
+            self.assertEqual(1, len(list(modelspace.query("MULTILEADER"))))
 
     def test_planned_hole_grid_renders_native_dimensions_with_provenance(self):
         snapshot = replace(
@@ -182,20 +186,25 @@ class PartDrawingOutputTests(unittest.TestCase):
         document = build_part_drawing_document(snapshot, geometry, features, layout, quantity=1)
 
         with tempfile.TemporaryDirectory() as directory:
-            paths = render_part_drawing(document, Path(directory))
+            paths = render_part_drawing(document, Path(directory), cjk_font_path=CJK_FONT)
             dxf = ezdxf.readfile(paths.dxf_path)
             dimensions = list(dxf.modelspace().query("DIMENSION"))
+            multileaders = list(dxf.modelspace().query("MULTILEADER"))
+            center_lines = list(dxf.modelspace().query('LINE[layer=="PART_CENTER"]'))
             payload = json.loads(paths.json_path.read_text(encoding="utf-8"))
 
             self.assertEqual(len(document.placed_dimensions), len(dimensions))
             self.assertFalse(list(dxf.modelspace().query('LINE[layer=="DIMENSION"]')))
-            self.assertIn("6-\u00d822", {item.dxf.text for item in dimensions})
+            self.assertNotIn("6-\u00d822", {item.dxf.text for item in dimensions})
             self.assertTrue(all(item.dxf.dimstyle == "PART-CAD-V1" for item in dimensions))
+            self.assertEqual(1, len(multileaders))
+            self.assertEqual(12, len(center_lines))
             callout = next(
                 item
-                for item in payload["placed_dimension_items"]
-                if item["dimension_id"] == "hole-grid-diameter"
+                for item in payload["placed_callout_items"]
+                if item["callout_id"] == "hole-grid-diameter"
             )
+            self.assertEqual("6\u03a622", callout["display_text"])
             self.assertEqual(["H1", "H2", "H3", "H4", "H5", "H6"], callout["source_feature_ids"])
 
     def test_chinese_pdf_text_requires_explicit_cjk_font(self):
