@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,14 @@ class CadDimensionStyle:
         if layout_scale <= 0:
             raise ValueError("layout scale must be positive")
         return 1.0 / layout_scale
+
+    def format_measurement(self, value: float) -> str:
+        quantum = Decimal(1).scaleb(-self.decimal_places)
+        rounded = Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
+        text = f"{rounded:.{self.decimal_places}f}"
+        if self.suppress_trailing_zeros and "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text
 
 
 PART_CAD_DIMENSION_STYLE_V1 = CadDimensionStyle(

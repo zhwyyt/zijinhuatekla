@@ -5,10 +5,12 @@ from enum import Enum
 
 from .contracts import DrawingStatus
 from .dimension_generator import DimensionKind
+from .dimension_style import PART_CAD_DIMENSION_STYLE_V1
 
 
 PAGE_WIDTH = 420.0
 PAGE_HEIGHT = 297.0
+TITLE_BLOCK_TOP = 242.0
 STANDARD_SCALES = (1.0, 0.5, 0.2, 0.1, 0.05)
 
 
@@ -123,7 +125,12 @@ def optimize_dimension_layout(snapshot, geometry, intents, quantity):
             continue
         dimension, line, text = _place(intent, view, transform, counts.get(band, 0))
         obstacle = dimension.text_box if dimension else text.box
-        if obstacle.left < 12 or obstacle.right > PAGE_WIDTH - 12 or obstacle.top < 12 or obstacle.bottom > PAGE_HEIGHT - 12:
+        if (
+            obstacle.left < 12
+            or obstacle.right > PAGE_WIDTH - 12
+            or obstacle.top < 12
+            or obstacle.bottom >= TITLE_BLOCK_TOP
+        ):
             unplaced.append(intent)
             continue
         existing_boxes = [item.text_box for item in dimensions] + [item.box for item in texts]
@@ -160,6 +167,7 @@ def _place(intent, view, transform, index):
         )
         points = _linear_source_points(intent, transform, kind)
         rotation = 90.0 if kind == PlacedDimensionKind.LINEAR_VERTICAL else 0.0
+        display_text = _dimension_display_text(intent)
         return (
             PlacedDimension(
                 intent.intent_id,
@@ -167,9 +175,9 @@ def _place(intent, view, transform, index):
                 points,
                 (x, y),
                 float(intent.model_value),
-                intent.text,
+                display_text,
                 rotation,
-                _dimension_text_box(x, y, intent.text, 2.5, rotation),
+                _dimension_text_box(x, y, display_text, 2.5, rotation),
                 evidence_codes=intent.evidence_codes,
             ),
             None,
@@ -184,7 +192,10 @@ def _place(intent, view, transform, index):
         paper_radius = float(intent.model_value) * transform.scale
         if intent.kind == DimensionKind.DIAMETER:
             paper_radius /= 2.0
+        x = center[0] + paper_radius + 12.0
+        y = center[1] - paper_radius - 8.0
         kind = PlacedDimensionKind(intent.kind.value)
+        display_text = _dimension_display_text(intent)
         return (
             PlacedDimension(
                 intent.intent_id,
@@ -192,9 +203,9 @@ def _place(intent, view, transform, index):
                 (center,),
                 (x, y),
                 float(intent.model_value),
-                intent.text,
+                display_text,
                 0.0,
-                _dimension_text_box(x, y, intent.text, 2.5, 0.0),
+                _dimension_text_box(x, y, display_text, 2.5, 0.0),
                 paper_radius,
                 intent.evidence_codes,
             ),
@@ -252,6 +263,15 @@ def _dimension_text_box(x, y, text, height, rotation):
     if rotation % 180 == 90:
         width, height = height * 2, width / 2
     return DrawingRect(x - width / 2, y - height, x + width / 2, y + height)
+
+
+def _dimension_display_text(intent):
+    text = PART_CAD_DIMENSION_STYLE_V1.format_measurement(intent.model_value)
+    if intent.kind == DimensionKind.DIAMETER:
+        return f"DIA{text}"
+    if intent.kind == DimensionKind.RADIUS:
+        return f"R{text}"
+    return text
 
 
 def _text_width(text, height):

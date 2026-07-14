@@ -1,12 +1,13 @@
 import unittest
 from dataclasses import replace
+import math
 from pathlib import Path
 
 from zijinhua_tekla.part_drawing.contracts import HoleSnapshot, Point3D
 from zijinhua_tekla.part_drawing.dimension_generator import generate_dimension_intents
 from zijinhua_tekla.part_drawing.dimension_optimizer import optimize_dimension_layout
 from zijinhua_tekla.part_drawing.feature_recognizer import recognize_plate_features
-from zijinhua_tekla.part_drawing.geometry_analyzer import analyze_plate_geometry
+from zijinhua_tekla.part_drawing.geometry_analyzer import Point2D, analyze_plate_geometry
 from zijinhua_tekla.part_drawing.snapshot_input import load_part_snapshot
 
 
@@ -39,6 +40,21 @@ class PartDrawingLayoutTests(unittest.TestCase):
             by_id["overall-x"].source_points[1],
         )
 
+    def test_semantic_dimension_uses_cad_style_display_precision(self):
+        intent = replace(
+            self.intents[0],
+            model_value=243.174,
+            text="243.174",
+        )
+        layout = optimize_dimension_layout(
+            self.snapshot,
+            self.geometry,
+            (intent,),
+            quantity=1,
+        )
+        self.assertEqual("243", layout.placed_dimensions[0].display_text)
+        self.assertEqual(243.174, layout.placed_dimensions[0].measured_value_mm)
+
     def test_places_hole_diameter_as_semantic_diameter_dimension(self):
         snapshot = replace(
             self.snapshot,
@@ -54,6 +70,12 @@ class PartDrawingLayoutTests(unittest.TestCase):
         self.assertEqual("DIAMETER", diameter.kind.value)
         self.assertEqual(22.0, diameter.measured_value_mm)
         self.assertEqual(11.0 * layout.scale, diameter.paper_radius)
+        center = diameter.source_points[0]
+        leader_distance = math.hypot(
+            diameter.dimension_line_point[0] - center[0],
+            diameter.dimension_line_point[1] - center[1],
+        )
+        self.assertLessEqual(leader_distance, diameter.paper_radius + 25.0)
 
     def test_dense_intents_request_review_instead_of_overlap(self):
         dense = tuple(replace(self.intents[0], intent_id=f"dense-{index}", text=str(index)) for index in range(80))
@@ -61,6 +83,29 @@ class PartDrawingLayoutTests(unittest.TestCase):
         self.assertEqual("REVIEW_REQUIRED", layout.status.value)
         self.assertGreater(len(layout.unplaced_intents), 0)
         self.assertLessEqual(len(layout.placed_dimensions) + len(layout.annotation_texts), 26)
+
+    def test_bottom_dimension_layers_do_not_enter_title_block(self):
+        bottom_intents = tuple(
+            replace(
+                self.intents[0],
+                intent_id=f"bottom-{index}",
+                text=str(20 + index),
+                model_value=float(20 + index),
+                anchors=(Point2D(0, 20 + index), Point2D(20 + index, 20 + index)),
+                preferred_band="bottom",
+            )
+            for index in range(6)
+        )
+        layout = optimize_dimension_layout(
+            self.snapshot,
+            self.geometry,
+            bottom_intents,
+            quantity=1,
+        )
+        self.assertTrue(layout.unplaced_intents)
+        self.assertTrue(
+            all(item.text_box.bottom < 242.0 for item in layout.placed_dimensions)
+        )
 
 
 if __name__ == "__main__":

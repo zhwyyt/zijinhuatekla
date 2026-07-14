@@ -28,6 +28,11 @@ class PartDrawingDimensionStyleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scale must be positive"):
             style.measurement_factor(0.0)
 
+    def test_v1_formats_display_values_with_sample_precision(self):
+        style = PART_CAD_DIMENSION_STYLE_V1
+        self.assertEqual("243", style.format_measurement(243.174))
+        self.assertEqual("244", style.format_measurement(243.6))
+
 
 if __name__ == "__main__":
     unittest.main()

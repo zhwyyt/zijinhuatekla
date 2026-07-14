@@ -24,6 +24,19 @@ class PartDrawingPipelineTests(unittest.TestCase):
             self.assertTrue((root / "out" / "parts" / "P-1001" / "P-1001.dxf").exists())
             summary = json.loads((root / "out" / "part-drawing-batch-summary.json").read_text(encoding="utf-8"))
             self.assertEqual({"OK": 1, "REVIEW_REQUIRED": 0, "REJECTED": 0}, summary["status_counts"])
+            drawing_payload = json.loads(
+                next((root / "out").rglob("*.drawing.json")).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                "partCadDimensionStyle.v1",
+                drawing_payload["dimension_style"]["style_id"],
+            )
+            self.assertGreaterEqual(
+                drawing_payload["entity_counts"]["dimensions"],
+                2,
+            )
 
     def test_cli_returns_nonzero_and_writes_only_conflict_evidence_for_rejected_group(self):
         with tempfile.TemporaryDirectory() as directory:

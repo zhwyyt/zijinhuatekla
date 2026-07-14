@@ -116,6 +116,20 @@ class PartDrawingOutputTests(unittest.TestCase):
                 draw_dimension.call_count,
             )
 
+    def test_dxf_keeps_style_formatted_linear_value_measurement_driven(self):
+        dimension = replace(
+            self.document.placed_dimensions[0],
+            measured_value_mm=243.174,
+            display_text="243",
+        )
+        self.assertEqual(
+            "<>",
+            drawing_output._dxf_dimension_text(
+                dimension,
+                self.document.dimension_style,
+            ),
+        )
+
     def test_renderer_does_not_emit_files_for_rejected_document(self):
         document = replace(self.document, status=DrawingStatus.REJECTED)
         with tempfile.TemporaryDirectory() as directory:

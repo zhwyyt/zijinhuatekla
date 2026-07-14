@@ -289,7 +289,7 @@ def _ensure_dxf_dimension_style(dxf, document) -> None:
 def _add_dxf_dimension(modelspace, document, dimension) -> None:
     factor = document.dimension_style.measurement_factor(document.scale)
     override = {"dimlfac": factor}
-    text = _dxf_dimension_text(dimension)
+    text = _dxf_dimension_text(dimension, document.dimension_style)
     if dimension.kind == PlacedDimensionKind.LINEAR_HORIZONTAL:
         rendered = modelspace.add_linear_dim(
             base=dimension.dimension_line_point,
@@ -333,8 +333,8 @@ def _add_dxf_dimension(modelspace, document, dimension) -> None:
     rendered.render()
 
 
-def _dxf_dimension_text(dimension) -> str:
-    plain = f"{dimension.measured_value_mm:g}"
+def _dxf_dimension_text(dimension, style) -> str:
+    plain = style.format_measurement(dimension.measured_value_mm)
     return "<>" if dimension.display_text == plain else dimension.display_text
 
 
