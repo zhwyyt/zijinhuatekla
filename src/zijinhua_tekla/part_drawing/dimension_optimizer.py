@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 
 from .contracts import DrawingStatus
+from .dimension_generator import DimensionKind
 
 
 PAGE_WIDTH = 420.0
@@ -68,6 +70,27 @@ class DrawingText:
     box: DrawingRect
 
 
+class PlacedDimensionKind(str, Enum):
+    LINEAR_HORIZONTAL = "LINEAR_HORIZONTAL"
+    LINEAR_VERTICAL = "LINEAR_VERTICAL"
+    RADIUS = "RADIUS"
+    DIAMETER = "DIAMETER"
+
+
+@dataclass(frozen=True)
+class PlacedDimension:
+    dimension_id: str
+    kind: PlacedDimensionKind
+    source_points: tuple[tuple[float, float], ...]
+    dimension_line_point: tuple[float, float]
+    measured_value_mm: float
+    display_text: str
+    text_rotation: float
+    text_box: DrawingRect
+    paper_radius: float = 0.0
+    evidence_codes: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True)
 class PartDrawingLayout:
     page_width: float
@@ -75,6 +98,7 @@ class PartDrawingLayout:
     scale: float
     view_rect: DrawingRect
     model_transform: ModelTransform
+    placed_dimensions: tuple[PlacedDimension, ...]
     annotation_lines: tuple[DrawingLine, ...]
     annotation_texts: tuple[DrawingText, ...]
     title_fields: dict[str, str]
@@ -89,7 +113,7 @@ def optimize_dimension_layout(snapshot, geometry, intents, quantity):
     offset_x = view.left + ((view.right - view.left) - geometry.bounds[2] * scale) / 2.0
     offset_y = view.top + ((view.bottom - view.top) + geometry.bounds[3] * scale) / 2.0
     transform = ModelTransform(scale, offset_x, offset_y)
-    lines, texts, unplaced = [], [], []
+    dimensions, lines, texts, unplaced = [], [], [], []
     counts = {"top": 0, "bottom": 0, "left": 0, "right": 0, "note": 0}
     limits = {"top": 6, "bottom": 6, "left": 6, "right": 6, "note": 8}
     for intent in sorted(intents, key=lambda item: (-item.priority, item.intent_id)):
@@ -97,19 +121,24 @@ def optimize_dimension_layout(snapshot, geometry, intents, quantity):
         if counts.get(band, 0) >= limits.get(band, 0):
             unplaced.append(intent)
             continue
-        line, text = _place(intent, view, counts.get(band, 0))
-        if text.box.left < 12 or text.box.right > PAGE_WIDTH - 12 or text.box.top < 12 or text.box.bottom > PAGE_HEIGHT - 12:
+        dimension, line, text = _place(intent, view, transform, counts.get(band, 0))
+        obstacle = dimension.text_box if dimension else text.box
+        if obstacle.left < 12 or obstacle.right > PAGE_WIDTH - 12 or obstacle.top < 12 or obstacle.bottom > PAGE_HEIGHT - 12:
             unplaced.append(intent)
             continue
-        if any(text.box.intersects(existing.box, 1.0) for existing in texts):
+        existing_boxes = [item.text_box for item in dimensions] + [item.box for item in texts]
+        if any(obstacle.intersects(existing, 1.0) for existing in existing_boxes):
             unplaced.append(intent)
             continue
+        if dimension:
+            dimensions.append(dimension)
         if line:
             lines.append(line)
-        texts.append(text)
+        if text:
+            texts.append(text)
         counts[band] = counts.get(band, 0) + 1
     return PartDrawingLayout(
-        PAGE_WIDTH, PAGE_HEIGHT, scale, view, transform, tuple(lines), tuple(texts),
+        PAGE_WIDTH, PAGE_HEIGHT, scale, view, transform, tuple(dimensions), tuple(lines), tuple(texts),
         {"part_position": snapshot.part_position, "name": snapshot.name, "material": snapshot.material, "thickness": str(snapshot.thickness), "quantity": str(quantity), "scale": f"1:{1 / scale:g}"},
         DrawingStatus.REVIEW_REQUIRED if unplaced else DrawingStatus.OK,
         0, tuple(unplaced),
@@ -121,25 +150,108 @@ def _fit_scale(width, height, view):
     return next((scale for scale in STANDARD_SCALES if width * scale <= available_width and height * scale <= available_height), STANDARD_SCALES[-1])
 
 
-def _place(intent, view, index):
+def _place(intent, view, transform, index):
+    x, y = _band_position(intent.preferred_band, view, index)
+    if _is_placeable_linear(intent):
+        kind = (
+            PlacedDimensionKind.LINEAR_VERTICAL
+            if intent.preferred_band in {"left", "right"}
+            else PlacedDimensionKind.LINEAR_HORIZONTAL
+        )
+        points = _linear_source_points(intent, transform, kind)
+        rotation = 90.0 if kind == PlacedDimensionKind.LINEAR_VERTICAL else 0.0
+        return (
+            PlacedDimension(
+                intent.intent_id,
+                kind,
+                points,
+                (x, y),
+                float(intent.model_value),
+                intent.text,
+                rotation,
+                _dimension_text_box(x, y, intent.text, 2.5, rotation),
+                evidence_codes=intent.evidence_codes,
+            ),
+            None,
+            None,
+        )
+    if (
+        intent.kind in {DimensionKind.DIAMETER, DimensionKind.RADIUS}
+        and intent.anchors
+        and intent.model_value is not None
+    ):
+        center = transform.point(intent.anchors[0])
+        paper_radius = float(intent.model_value) * transform.scale
+        if intent.kind == DimensionKind.DIAMETER:
+            paper_radius /= 2.0
+        kind = PlacedDimensionKind(intent.kind.value)
+        return (
+            PlacedDimension(
+                intent.intent_id,
+                kind,
+                (center,),
+                (x, y),
+                float(intent.model_value),
+                intent.text,
+                0.0,
+                _dimension_text_box(x, y, intent.text, 2.5, 0.0),
+                paper_radius,
+                intent.evidence_codes,
+            ),
+            None,
+            None,
+        )
     height = 3.5
-    if intent.preferred_band == "top":
-        x, y = (view.left + view.right) / 2, view.top - 8 - index * 7
-        line = DrawingLine(view.left, y + 2, view.right, y + 2, "DIMENSION")
-    elif intent.preferred_band == "right":
-        x, y = view.right + 12 + index * 9, (view.top + view.bottom) / 2
-        line = DrawingLine(x - 3, view.top, x - 3, view.bottom, "DIMENSION")
-    elif intent.preferred_band == "bottom":
-        x, y = (view.left + view.right) / 2, view.bottom + 10 + index * 7
-        line = DrawingLine(view.left, y - 2, view.right, y - 2, "DIMENSION")
-    elif intent.preferred_band == "left":
-        x, y = view.left - 30 - index * 9, (view.top + view.bottom) / 2
-        line = DrawingLine(x + 20, view.top, x + 20, view.bottom, "DIMENSION")
-    else:
-        x, y = view.left, 232 + index * 7
-        line = None
     width = _text_width(intent.text, height)
-    return line, DrawingText(x, y, intent.text, height, "ANNOTATION", DrawingRect(x - width / 2, y - height, x + width / 2, y + height))
+    text = DrawingText(
+        x,
+        y,
+        intent.text,
+        height,
+        "ANNOTATION",
+        DrawingRect(x - width / 2, y - height, x + width / 2, y + height),
+    )
+    return None, None, text
+
+
+def _is_placeable_linear(intent):
+    return (
+        len(intent.anchors) >= 2
+        and intent.model_value is not None
+        and intent.kind
+        in {
+            DimensionKind.OVERALL,
+            DimensionKind.DATUM_X,
+            DimensionKind.DATUM_Y,
+            DimensionKind.LENGTH,
+            DimensionKind.WIDTH,
+        }
+    )
+
+
+def _linear_source_points(intent, transform, kind):
+    points = tuple(transform.point(anchor) for anchor in intent.anchors)
+    axis = 1 if kind == PlacedDimensionKind.LINEAR_VERTICAL else 0
+    return min(points, key=lambda point: point[axis]), max(points, key=lambda point: point[axis])
+
+
+def _band_position(band, view, index):
+    if band == "top":
+        return (view.left + view.right) / 2, view.top - 8 - index * 7
+    if band == "right":
+        return view.right + 12 + index * 9, (view.top + view.bottom) / 2
+    if band == "bottom":
+        return (view.left + view.right) / 2, view.bottom + 10 + index * 7
+    if band == "left":
+        return view.left - 30 - index * 9, (view.top + view.bottom) / 2
+    return view.left, 232 + index * 7
+
+
+def _dimension_text_box(x, y, text, height, rotation):
+    width = _text_width(text, height)
+    if rotation % 180 == 90:
+        width, height = height * 2, width / 2
+    return DrawingRect(x - width / 2, y - height, x + width / 2, y + height)
 
 
 def _text_width(text, height):

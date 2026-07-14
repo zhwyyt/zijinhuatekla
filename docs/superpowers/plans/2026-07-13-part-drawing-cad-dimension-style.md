@@ -163,8 +163,8 @@ def test_places_rectangle_dimensions_as_semantic_linear_dimensions(self):
     by_id = {item.dimension_id: item for item in layout.placed_dimensions}
     self.assertEqual("LINEAR_HORIZONTAL", by_id["overall-x"].kind.value)
     self.assertEqual("LINEAR_VERTICAL", by_id["overall-y"].kind.value)
-    self.assertEqual(220.0, by_id["overall-x"].measured_value_mm)
-    self.assertEqual(140.0, by_id["overall-y"].measured_value_mm)
+    self.assertEqual(200.0, by_id["overall-x"].measured_value_mm)
+    self.assertEqual(100.0, by_id["overall-y"].measured_value_mm)
     self.assertEqual(2, len(by_id["overall-x"].source_points))
     self.assertNotEqual(
         by_id["overall-x"].source_points[0],
@@ -459,13 +459,13 @@ self.assertEqual(8, style.dxf.dimzin)
 self.assertEqual("OBLIQUE", style.dxf.dimblk)
 self.assertEqual(0.65, dxf.styles.get("TArial").dxf.width)
 raw_measurements = sorted(float(item.get_measurement()) for item in dimensions)
-self.assertEqual([140.0, 220.0], raw_measurements)
+self.assertEqual([100.0, 200.0], raw_measurements)
 for entity in dimensions:
     overrides = entity.get_acad_dstyle(dxf.dimstyles.get(entity.dxf.dimstyle))
     self.assertEqual(1.0, overrides["dimlfac"])
 ```
 
-The rectangular fixture fits at scale `1.0`; its raw measurements and model values are both `220/140`. The style-contract test covers inverse factors for all standard scales, and the real `T3-PX-317` smoke below verifies the `0.5 -> 2.0` DXF override path.
+The rectangular fixture fits at scale `1.0`; its raw measurements and model values are both `200/100`. The style-contract test covers inverse factors for all standard scales, and the real `T3-PX-317` smoke below verifies the `0.5 -> 2.0` DXF override path.
 
 In the round-hole test:
 
@@ -618,11 +618,11 @@ Extend the common output test:
 ```python
 pdf = PdfReader(str(paths.pdf_path))
 page_text = pdf.pages[0].extract_text()
-self.assertIn("220", page_text)
-self.assertIn("140", page_text)
+self.assertIn("200", page_text)
+self.assertIn("100", page_text)
 self.assertEqual(
     sorted(item.display_text for item in self.document.placed_dimensions),
-    sorted(text for text in ("220", "140") if text in page_text),
+    sorted(text for text in ("200", "100") if text in page_text),
 )
 ```
 
