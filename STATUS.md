@@ -1,3 +1,11 @@
+## Handoff - 2026-07-14 零件图先规划后避让
+
+工作目录：`I:\tmp\zijinhuatekla-part-drawing-engine`，分支 `codex/offline-part-drawing-engine`。
+
+已新增独立 `DimensionPlanner`：先按外轮廓和完整孔阵规划连续尺寸链、侧边和层级，再由布局层在固定层内避让；总尺寸位于特征定位链外侧，孔组合并为一次数量/孔径引出。真实 `T3-PX-317` 从旧 `REVIEW_REQUIRED + 7 LAYOUT_OVERFLOW` 收敛为 `OK=1`，DXF 为 10 个原生 `DIMENSION`：`60/90/90/60`、`93.174/90/60.001`、`300/243.174` 和 `6-Ø27`，audit `0/0`。专项 30 tests、全量 183 tests 均通过；证据见 `docs/verification/2026-07-14-part-drawing-dimension-planner.md`。
+
+剩余边界：缺孔、混合孔径和非正交孔阵继续进入 `DIMENSION_PLAN_INCOMPLETE`；等距段尚未压缩为 `2@90`；AutoCAD GUI/Core Console 正式打开审计未完成。下一步先由用户在目标 CAD 中复核本轮 DXF 图面，再决定扩展孔阵类型或等距合并表达。
+
 ## Handoff - 2026-07-13 零件图 CAD 原生尺寸样式
 
 工作目录：`I:\tmp\zijinhuatekla-part-drawing-engine`，分支 `codex/offline-part-drawing-engine`。
