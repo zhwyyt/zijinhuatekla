@@ -867,20 +867,20 @@ Expected: focused tests PASS; full suite reports all tests `OK`. Record exact co
 ```powershell
 python -m zijinhua_tekla.cli draw-parts `
   --snapshot-root I:\tmp\tekla-selected-part-snapshot-smoke-20260713-v2\part-drawing-snapshots `
-  --out I:\tmp\tekla-selected-part-drawing-cad-style-20260713 `
+  --out I:\tmp\tekla-selected-part-drawing-cad-style-20260713-v4 `
   --cjk-font C:\Windows\Fonts\simhei.ttf
 ```
 
-Expected: one `T3-PX-317` DXF/PDF/drawing JSON is generated; status remains `REVIEW_REQUIRED` while the 17 unplaced hole-related intents remain reported.
+Actual: one `T3-PX-317` DXF/PDF/drawing JSON was generated. Status remains `REVIEW_REQUIRED`; collision-safe local radial placement reduced the historical 17 unplaced intents to 7, all explicitly reported in the manifest.
 
 - [ ] **Step 5: Audit the real DXF and render a PDF preview**
 
 ```powershell
-python -c "import ezdxf; p=r'I:\tmp\tekla-selected-part-drawing-cad-style-20260713\parts\T3-PX-317\T3-PX-317.dxf'; d=ezdxf.readfile(p); a=d.audit(); dims=list(d.modelspace().query('DIMENSION')); factor=dims[0].get_acad_dstyle(d.dimstyles.get(dims[0].dxf.dimstyle)).get('dimlfac') if dims else None; print(f'dimensions={len(dims)} audit_errors={len(a.errors)} audit_fixes={len(a.fixes)} style={dims[0].dxf.dimstyle if dims else None} dimlfac={factor}')"
-pdftoppm -png -f 1 -singlefile -r 150 I:\tmp\tekla-selected-part-drawing-cad-style-20260713\parts\T3-PX-317\T3-PX-317.pdf I:\tmp\tekla-selected-part-drawing-cad-style-20260713\T3-PX-317-preview
+python -c "import ezdxf; p=r'I:\tmp\tekla-selected-part-drawing-cad-style-20260713-v4\parts\T3-PX-317\T3-PX-317.dxf'; d=ezdxf.readfile(p); a=d.audit(); dims=list(d.modelspace().query('DIMENSION')); factor=dims[0].get_acad_dstyle(d.dimstyles.get(dims[0].dxf.dimstyle)).get('dimlfac') if dims else None; print(f'dimensions={len(dims)} audit_errors={len(a.errors)} audit_fixes={len(a.fixes)} style={dims[0].dxf.dimstyle if dims else None} dimlfac={factor}')"
+pdftoppm -png -f 1 -singlefile -r 150 I:\tmp\tekla-selected-part-drawing-cad-style-20260713-v4\parts\T3-PX-317\T3-PX-317.pdf I:\tmp\tekla-selected-part-drawing-cad-style-20260713-v4\T3-PX-317-preview
 ```
 
-Expected: at least two native dimensions, `audit_errors=0`, `audit_fixes=0`, style `PART-CAD-V1`, `dimlfac=2.0`, and a nonblank PNG preview.
+Actual: 13 native dimensions, `audit_errors=0`, `audit_fixes=0`, style `PART-CAD-V1`, `dimlfac=2.0`, and a nonblank PNG preview.
 
 - [ ] **Step 6: Perform the required visual checks**
 
@@ -891,7 +891,7 @@ Inspect the PNG and DXF in CAD:
 - horizontal and vertical dimension text follow their dimension direction;
 - dimension text is visibly narrower and smaller than the old `3.5` annotation text;
 - no new overlaps appear;
-- the 17 unplaced hole annotations are still explicitly reported.
+- the 7 remaining unplaced hole-location annotations are explicitly reported.
 
 Do not mark the visual check passed from entity counts alone.
 
@@ -949,5 +949,5 @@ Expected: only the pipeline regression, live-memory updates, and verification re
 - DXF contains editable native dimensions with `PART-CAD-V1`.
 - PDF consumes the same `PlacedDimension` records and visually matches the confirmed sample style.
 - Real `T3-PX-317` output is regenerated and manually inspected.
-- The existing 17 unplaced hole-related annotations remain visible as review debt, not silently converted or discarded.
+- Seven collision-unsafe hole-location annotations remain visible as review debt; no intent is silently discarded.
 - Focused tests, full suite, DXF audit, and CCG verification are freshly passing.

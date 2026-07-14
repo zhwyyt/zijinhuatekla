@@ -1,3 +1,13 @@
+## Handoff - 2026-07-13 零件图 CAD 原生尺寸样式
+
+工作目录：`I:\tmp\zijinhuatekla-part-drawing-engine`，分支 `codex/offline-part-drawing-engine`。
+
+已按根目录 `零件标注.dwg` 固化 `partCadDimensionStyle.v1`：DXF 输出可编辑原生 `DIMENSION`，线性尺寸采用 45 度斜杠，半径/直径采用实心箭头；PDF 从同一 `PlacedDimension` 和样式 DTO 渲染。径向引线改为特征局部放置，标题区加入统一障碍边界，尺寸显示按样板整数精度输出但保留精确测量值。
+
+最新验证：focused `24 tests OK`，完整回归 `174 tests OK`；真实 `T3-PX-317` smoke 为 `REVIEW_REQUIRED=1 / REJECTED=0`，DXF 原生尺寸 `13`、style `PART-CAD-V1`、`dimlfac=2.0`、audit `0 errors/0 fixes`；PDF A3 预览人工检查无跨图引线或标题区穿越。证据见 `docs/verification/2026-07-13-part-drawing-cad-dimension-style.md`。
+
+剩余边界：7 个孔定位尺寸因左/下标注带容量与标题区保护未放置，均保留在 `LAYOUT_OVERFLOW` evidence；应后续设计孔组/共同基准尺寸链，不得放宽碰撞边界硬塞。AutoCAD 2025 Core Console 打开审计脚本因本机语言提示超时，本轮未取得 CAD 控制台正式 audit 结论。
+
 ## Handoff - 2026-07-13 平板零件离线出图引擎
 
 工作目录：`I:\tmp\zijinhuatekla-part-drawing-engine`，分支 `codex/offline-part-drawing-engine`。

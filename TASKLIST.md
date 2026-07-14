@@ -7,6 +7,8 @@
 - [x] 完成共享 DXF/PDF/drawing JSON 输出、DXF audit、PDF 读回和 CJK 字体失败门。
 - [x] 完成 `draw-parts` 批处理 CLI、同编号制造指纹冲突门、失败隔离和批次摘要。
 - [x] 完成 fixture smoke 和全量回归，证据见 `docs/verification/2026-07-13-offline-part-drawing-engine.md`。
+- [x] 按 `零件标注.dwg` 固化 `partCadDimensionStyle.v1`，DXF 改为原生 `DIMENSION`，PDF 共用语义尺寸和样式；真实 `T3-PX-317` 已验证 13 个原生尺寸、audit `0/0`，证据见 `docs/verification/2026-07-13-part-drawing-cad-dimension-style.md`。
+- [ ] 将真实 `T3-PX-317` 剩余 7 个孔定位尺寸收敛为孔组/共同基准尺寸链；继续保留 `LAYOUT_OVERFLOW`，禁止尺寸穿越标题区。
 - [ ] 在 Tekla 导出器实现 `partDrawingSnapshot.v1` 生产端。
 - [ ] 用真实 Tekla 平板零件完成首轮快照与 DXF/PDF 人工复核。
 
