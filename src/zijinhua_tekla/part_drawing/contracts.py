@@ -66,6 +66,66 @@ class HoleSnapshot:
 
 
 @dataclass(frozen=True)
+class SolidVertexSnapshot:
+    vertex_id: str
+    point: Point3D
+
+
+@dataclass(frozen=True)
+class SolidEdgeSnapshot:
+    edge_id: str
+    curve_type: str
+    start: Point3D
+    end: Point3D
+    center: Point3D | None = None
+    radius: float = 0.0
+    adjacent_face_ids: tuple[str, ...] = ()
+    evidence_status: str = "PROVEN"
+    source_evidence: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SolidLoopSnapshot:
+    loop_id: str
+    ordered_edge_ids: tuple[str, ...]
+    ordered_vertices: tuple[Point3D, ...]
+
+
+@dataclass(frozen=True)
+class SolidFaceSnapshot:
+    face_id: str
+    surface_type: str
+    normal: Vector3D
+    relation_to_part_frame: str
+    loops: tuple[SolidLoopSnapshot, ...]
+    source_evidence: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class SolidGeometrySnapshot:
+    vertices: tuple[SolidVertexSnapshot, ...] = ()
+    edges: tuple[SolidEdgeSnapshot, ...] = ()
+    faces: tuple[SolidFaceSnapshot, ...] = ()
+    principal_face_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class OperationSnapshot:
+    operation_id: str
+    operation_type: str
+    operative_geometry: SolidGeometrySnapshot
+    source_evidence: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class QualityIssueSnapshot:
+    code: str
+    message: str
+    blocking: bool
+    evidence: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class PartDrawingSnapshot:
     schema_version: str
     exporter_version: str
@@ -85,6 +145,10 @@ class PartDrawingSnapshot:
     holes: tuple[HoleSnapshot, ...] = ()
     cuts: tuple[dict[str, Any], ...] = ()
     source_evidence: tuple[str, ...] = ()
+    part_form: str = "FLAT_PLATE"
+    final_geometry: SolidGeometrySnapshot | None = None
+    operations: tuple[OperationSnapshot, ...] = ()
+    quality_issues: tuple[QualityIssueSnapshot, ...] = ()
 
 
 @dataclass(frozen=True)
