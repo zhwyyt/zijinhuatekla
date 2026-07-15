@@ -61,6 +61,9 @@ def recognize_plate_features(
             ))
     features.extend(_outer_features(geometry))
     features.extend(_explicit_bevels(snapshot))
+    evidence_bevels, bevel_issues = _principal_face_bevels(snapshot, geometry)
+    features.extend(evidence_bevels)
+    issues.extend(bevel_issues)
     return FeatureRecognitionResult(
         tuple(features),
         DrawingStatus.REVIEW_REQUIRED if issues else DrawingStatus.OK,
@@ -150,6 +153,218 @@ def _explicit_bevels(snapshot) -> list[RecognizedFeature]:
         for index, cut in enumerate(snapshot.cuts, 1)
         if str(cut.get("operationType") or "").upper() == "BEVEL"
     ]
+
+
+def _principal_face_bevels(snapshot, geometry):
+    evidence, message = _principal_face_evidence(snapshot, geometry)
+    if message:
+        return [], [_bevel_issue(snapshot, message)]
+    if evidence is None:
+        return [], []
+    first_segments, second_segments = evidence[4:]
+    alignment = _best_edge_alignment(first_segments, second_segments)
+    if alignment is None:
+        return [], [_bevel_issue(snapshot, "principal face edges cannot be paired")]
+    return _bevel_from_alignment(snapshot, evidence, alignment)
+
+
+def _principal_face_evidence(snapshot, geometry):
+    solid = snapshot.final_geometry
+    if snapshot.schema_version != "partDrawingSnapshot.v2" or solid is None:
+        return None, None
+    if len(solid.principal_face_ids) != 2:
+        return None, "principal face pair is incomplete"
+
+    faces = {face.face_id: face for face in solid.faces}
+    edges = {edge.edge_id: edge for edge in solid.edges}
+    try:
+        first_face, second_face = (faces[item] for item in solid.principal_face_ids)
+    except KeyError:
+        return None, "principal face reference is missing"
+    first_loop = _largest_face_loop(first_face, snapshot)
+    second_loop = _largest_face_loop(second_face, snapshot)
+    if first_loop is None or second_loop is None:
+        return None, "principal face outer loop is missing"
+    if len(first_loop.ordered_edge_ids) != len(second_loop.ordered_edge_ids):
+        return None, "principal face topology does not match"
+
+    first_segments = _loop_segments(first_loop, snapshot, geometry, edges)
+    second_segments = _loop_segments(second_loop, snapshot, geometry, edges)
+    if first_segments is None or second_segments is None:
+        return None, "principal face edge evidence is unresolved"
+    return (
+        first_face,
+        second_face,
+        first_loop,
+        second_loop,
+        first_segments,
+        second_segments,
+    ), None
+
+
+def _bevel_from_alignment(snapshot, evidence, alignment):
+    first_face, second_face, first_loop, second_loop, first_segments, second_segments = evidence
+    paired, offsets = alignment
+    changed = [index for index, value in enumerate(offsets) if value > 0.1]
+    if not changed:
+        return [], []
+    if len(changed) != 1:
+        return [], [_bevel_issue(snapshot, "multiple principal face edge offsets are unexplained")]
+
+    first_area = _point_loop_area(tuple(item[0] for item in first_segments))
+    second_area = _point_loop_area(tuple(item[0] for item in second_segments))
+    if abs(first_area - second_area) <= 0.1:
+        return [], [_bevel_issue(snapshot, "setback face side cannot be proven")]
+    changed_index = changed[0]
+    first_edge, second_edge = paired[changed_index]
+    if second_area < first_area:
+        shifted_face, shifted_edge = second_face, second_edge
+        counterpart_edge = first_edge
+    else:
+        shifted_face, shifted_edge = first_face, first_edge
+        counterpart_edge = second_edge
+
+    setback = round(offsets[changed_index], 6)
+    parameters = {
+        "setback": setback,
+        "depth": snapshot.thickness,
+        "face_side": shifted_face.relation_to_part_frame,
+        "angle_status": "REVIEW_REQUIRED",
+    }
+    face_separation = _principal_face_separation(first_loop, second_loop, snapshot)
+    evidence_codes = ["PRINCIPAL_FACE_SINGLE_EDGE_SETBACK"]
+    if abs(face_separation - snapshot.thickness) <= 0.1:
+        parameters["angleDeg"] = round(
+            math.degrees(math.atan2(snapshot.thickness, setback)), 6
+        )
+        parameters["angle_status"] = "PROVEN"
+        evidence_codes.append("PRINCIPAL_FACE_SEPARATION_MATCHES_THICKNESS")
+
+    return [RecognizedFeature(
+        "bevel-principal-face-1",
+        FeatureType.BEVEL,
+        tuple(sorted((shifted_edge[0], shifted_edge[1]))),
+        parameters,
+        (
+            first_face.face_id,
+            second_face.face_id,
+            shifted_edge[2],
+            counterpart_edge[2],
+        ),
+        tuple(evidence_codes),
+        1.0,
+    )], []
+
+
+def _largest_face_loop(face, snapshot):
+    valid = [loop for loop in face.loops if len(loop.ordered_vertices) >= 3]
+    return max(
+        valid,
+        key=lambda loop: _point_loop_area(tuple(
+            project_point(point, snapshot.local_frame)
+            for point in loop.ordered_vertices
+        )),
+        default=None,
+    )
+
+
+def _loop_segments(loop, snapshot, geometry, edges):
+    if len(loop.ordered_vertices) != len(loop.ordered_edge_ids):
+        return None
+    points = tuple(
+        Point2D(
+            project_point(point, snapshot.local_frame).x - geometry.normalization_offset.x,
+            project_point(point, snapshot.local_frame).y - geometry.normalization_offset.y,
+        )
+        for point in loop.ordered_vertices
+    )
+    result = []
+    for index, edge_id in enumerate(loop.ordered_edge_ids):
+        edge = edges.get(edge_id)
+        if edge is None or edge.curve_type != "LINE" or edge.evidence_status != "PROVEN":
+            return None
+        result.append((points[index], points[(index + 1) % len(points)], edge_id))
+    return tuple(result)
+
+
+def _best_edge_alignment(first, second):
+    variants = [second, tuple((end, start, edge_id) for start, end, edge_id in reversed(second))]
+    candidates = []
+    for variant in variants:
+        for offset in range(len(variant)):
+            rotated = variant[offset:] + variant[:offset]
+            distances = []
+            for left, right in zip(first, rotated):
+                distance = _parallel_line_offset(left, right)
+                if distance is None:
+                    break
+                distances.append(distance)
+            if len(distances) == len(first):
+                candidates.append((
+                    sum(value > 0.1 for value in distances),
+                    round(sum(distances), 6),
+                    tuple(zip(first, rotated)),
+                    tuple(distances),
+                ))
+    if not candidates:
+        return None
+    best = min(candidates, key=lambda item: (item[0], item[1]))
+    return best[2], best[3]
+
+
+def _parallel_line_offset(first, second):
+    first_line = _support_line(first[0], first[1])
+    second_line = _support_line(second[0], second[1])
+    if first_line is None or second_line is None:
+        return None
+    if abs(first_line[0] * second_line[1] - first_line[1] * second_line[0]) > 0.001:
+        return None
+    return abs(first_line[2] - second_line[2])
+
+
+def _support_line(start, end):
+    dx, dy = end.x - start.x, end.y - start.y
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        return None
+    nx, ny = -dy / length, dx / length
+    if nx < -1e-9 or (abs(nx) <= 1e-9 and ny < 0):
+        nx, ny = -nx, -ny
+    return nx, ny, nx * start.x + ny * start.y
+
+
+def _point_loop_area(points):
+    return abs(sum(
+        point.x * points[(index + 1) % len(points)].y
+        - points[(index + 1) % len(points)].x * point.y
+        for index, point in enumerate(points)
+    )) / 2.0
+
+
+def _principal_face_separation(first_loop, second_loop, snapshot):
+    normal = snapshot.local_frame.normal
+    origin = snapshot.local_frame.origin
+
+    def coordinate(point):
+        return (
+            (point.x - origin.x) * normal.x
+            + (point.y - origin.y) * normal.y
+            + (point.z - origin.z) * normal.z
+        )
+
+    first = sum(coordinate(point) for point in first_loop.ordered_vertices) / len(first_loop.ordered_vertices)
+    second = sum(coordinate(point) for point in second_loop.ordered_vertices) / len(second_loop.ordered_vertices)
+    return abs(first - second)
+
+
+def _bevel_issue(snapshot, message):
+    return DrawingIssue(
+        IssueCode.FEATURE_AMBIGUOUS,
+        message,
+        False,
+        (snapshot.part_id,),
+        ("PRINCIPAL_FACE_BEVEL_EVIDENCE",),
+    )
 
 
 def _distance(first, second) -> float:

@@ -1,3 +1,11 @@
+## Handoff - 2026-07-14 零件图 V2 几何证据与坡口闭环
+
+`partDrawingSnapshot.v2` 已完成真实闭环：Tekla 导出 final solid 全部 faces/loops/edges/vertices、双 principal faces 和 Boolean operative solid；Python 保持 v1/v2 兼容，并从双主面“唯一单边退让”证据识别坡口，输出原生 `BEVEL` 图层线。真实 `T3-PX-317 / 45416496` 导出为 7 faces、15 edges、10 vertices、principal faces `F5/F3`、1 个 operative solid；识别退让约 `14 mm`、板厚 `16 mm`、坡口角 `48.814085 deg`。
+
+真实 DXF 读回：12 条孔中心线、1 个原生 `MULTILEADER`（`6Φ27`）、9 个原生 `DIMENSION`、1 条 `BEVEL` 线、无孔组伪直径尺寸、audit `0/0`；PDF 人工预览无重叠。验证：C# 34 tests、Runner build 0 warning/0 error、Python focused 46 tests、全量 190 tests。证据见 `docs/verification/2026-07-14-part-drawing-v2-geometry-smoke.md`。
+
+边界：折弯/曲面/型材目前只保证 v2 证据可承载，仍由 `PART_FORM_UNSUPPORTED_FOR_DRAWING` 阻断自动出图；无参数曲线保持 `UNKNOWN/UNRESOLVED`，不猜圆弧。
+
 ## Handoff - 2026-07-14 零件图先规划后避让
 
 工作目录：`I:\tmp\zijinhuatekla-part-drawing-engine`，分支 `codex/offline-part-drawing-engine`。

@@ -36,6 +36,7 @@ LAYERS = {
     "PART_CONTOUR": 7,
     "PART_INNER": 3,
     "PART_CENTER": 4,
+    "BEVEL": 5,
     "DIMENSION": 2,
     "ANNOTATION": 6,
     "TITLE_BLOCK": 7,
@@ -62,6 +63,7 @@ class PartDrawingDocument:
     source: dict[str, str]
     tolerances: dict[str, float]
     recognized_feature_ids: tuple[str, ...]
+    recognized_feature_items: tuple[dict[str, Any], ...]
     contour_segments: tuple[DrawingLine | DrawingArc, ...]
     inner_segments: tuple[DrawingLine | DrawingArc | DrawingCircle, ...]
     placed_dimensions: tuple[PlacedDimension, ...]
@@ -121,6 +123,11 @@ def build_part_drawing_document(
         if feature.feature_type == FeatureType.ROUND_HOLE
         for line in _round_hole_center_lines(feature, layout.model_transform)
     )
+    bevel_lines = tuple(
+        _bevel_line(feature, layout.model_transform)
+        for feature in features
+        if feature.feature_type == FeatureType.BEVEL and len(feature.anchors) == 2
+    )
     return PartDrawingDocument(
         schema_version="partDrawingDocument.v1",
         rule_version="partDrawingRules.v1",
@@ -145,12 +152,13 @@ def build_part_drawing_document(
             "thickness_match_mm": 0.01,
         },
         recognized_feature_ids=tuple(feature.feature_id for feature in features),
+        recognized_feature_items=tuple(_feature_evidence(feature) for feature in features),
         contour_segments=contour_segments,
         inner_segments=inner_segments,
         placed_dimensions=layout.placed_dimensions,
         placed_callouts=layout.placed_callouts,
         dimension_style=PART_CAD_DIMENSION_STYLE_V1,
-        annotation_lines=layout.annotation_lines + center_lines,
+        annotation_lines=layout.annotation_lines + center_lines + bevel_lines,
         annotation_text_items=layout.annotation_texts,
         title_fields=layout.title_fields,
         issues=issues,
@@ -243,6 +251,24 @@ def _round_hole_center_lines(feature: RecognizedFeature, transform: ModelTransfo
         DrawingLine(center[0] - extent, center[1], center[0] + extent, center[1], "PART_CENTER"),
         DrawingLine(center[0], center[1] - extent, center[0], center[1] + extent, "PART_CENTER"),
     )
+
+
+def _bevel_line(feature: RecognizedFeature, transform: ModelTransform):
+    start = transform.point(feature.anchors[0])
+    end = transform.point(feature.anchors[1])
+    return DrawingLine(*start, *end, "BEVEL")
+
+
+def _feature_evidence(feature: RecognizedFeature) -> dict[str, Any]:
+    return {
+        "feature_id": feature.feature_id,
+        "feature_type": feature.feature_type.value,
+        "anchors": [[point.x, point.y] for point in feature.anchors],
+        "parameters": dict(feature.parameters),
+        "source_ids": list(feature.source_ids),
+        "evidence_codes": list(feature.evidence_codes),
+        "confidence": feature.confidence,
+    }
 
 
 def _resolve_pdf_font(document: PartDrawingDocument, cjk_font_path: Path | None) -> str:
@@ -632,6 +658,7 @@ def _document_to_jsonable(document: PartDrawingDocument) -> dict[str, Any]:
         "source": document.source,
         "tolerances": document.tolerances,
         "recognized_feature_ids": list(document.recognized_feature_ids),
+        "recognized_feature_items": list(document.recognized_feature_items),
         "annotation_texts": document.annotation_texts(),
         "placed_dimensions": [
             item.display_text for item in document.placed_dimensions

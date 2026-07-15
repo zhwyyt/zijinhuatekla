@@ -23,8 +23,12 @@ from zijinhua_tekla.part_drawing.drawing_output import (
     build_part_drawing_document,
     render_part_drawing,
 )
-from zijinhua_tekla.part_drawing.feature_recognizer import recognize_plate_features
-from zijinhua_tekla.part_drawing.geometry_analyzer import analyze_plate_geometry
+from zijinhua_tekla.part_drawing.feature_recognizer import (
+    FeatureType,
+    RecognizedFeature,
+    recognize_plate_features,
+)
+from zijinhua_tekla.part_drawing.geometry_analyzer import Point2D, analyze_plate_geometry
 from zijinhua_tekla.part_drawing.snapshot_input import load_part_snapshot
 
 
@@ -244,6 +248,41 @@ class PartDrawingOutputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             paths = render_part_drawing(document, Path(directory))
             self.assertEqual(4, len(list(ezdxf.readfile(paths.dxf_path).modelspace().query("ARC"))))
+
+    def test_evidence_backed_bevel_renders_on_native_layer_and_serializes_evidence(self):
+        feature = RecognizedFeature(
+            "bevel-principal-face-1",
+            FeatureType.BEVEL,
+            (Point2D(10, 0), Point2D(10, 100)),
+            {
+                "setback": 10.0,
+                "depth": 10.0,
+                "angleDeg": 45.0,
+                "angle_status": "PROVEN",
+                "face_side": "NORMAL_NEGATIVE",
+            },
+            ("F1", "F2", "E8", "E4"),
+            ("PRINCIPAL_FACE_SINGLE_EDGE_SETBACK",),
+            1.0,
+        )
+        document = build_part_drawing_document(
+            self.snapshot,
+            self.geometry,
+            (feature,),
+            self.layout,
+            quantity=1,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            paths = render_part_drawing(document, Path(directory))
+            modelspace = ezdxf.readfile(paths.dxf_path).modelspace()
+            payload = json.loads(paths.json_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(1, len(list(modelspace.query('LINE[layer=="BEVEL"]'))))
+            item = payload["recognized_feature_items"][0]
+            self.assertEqual("BEVEL", item["feature_type"])
+            self.assertEqual(["F1", "F2", "E8", "E4"], item["source_ids"])
+            self.assertEqual("PROVEN", item["parameters"]["angle_status"])
 
     def _document_for(self, snapshot):
         geometry = analyze_plate_geometry(snapshot).geometry

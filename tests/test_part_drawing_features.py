@@ -2,7 +2,16 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from zijinhua_tekla.part_drawing.contracts import ContourSegmentSnapshot, HoleSnapshot, Point3D
+from zijinhua_tekla.part_drawing.contracts import (
+    ContourSegmentSnapshot,
+    HoleSnapshot,
+    Point3D,
+    SolidEdgeSnapshot,
+    SolidFaceSnapshot,
+    SolidGeometrySnapshot,
+    SolidLoopSnapshot,
+    Vector3D,
+)
 from zijinhua_tekla.part_drawing.feature_recognizer import recognize_plate_features
 from zijinhua_tekla.part_drawing.geometry_analyzer import analyze_plate_geometry
 from zijinhua_tekla.part_drawing.snapshot_input import load_part_snapshot
@@ -73,6 +82,98 @@ class PartDrawingFeatureTests(unittest.TestCase):
         ambiguous = self.recognize(replace(self.base, inner_loops=(self.arc_loop(False),)))
         self.assertIn("ARC_CUTOUT", [item.feature_type.value for item in valid.features])
         self.assertEqual("REVIEW_REQUIRED", ambiguous.status.value)
+
+    def test_recognizes_single_edge_setback_as_evidence_backed_bevel(self):
+        snapshot = self.v2_with_principal_faces(
+            ((10, 20), (210, 20), (210, 120), (10, 120)),
+            ((20, 20), (210, 20), (210, 120), (20, 120)),
+        )
+
+        result = self.recognize(snapshot)
+
+        bevel = next(item for item in result.features if item.feature_type.value == "BEVEL")
+        self.assertEqual(10.0, bevel.parameters["setback"])
+        self.assertEqual(45.0, bevel.parameters["angleDeg"])
+        self.assertEqual("PROVEN", bevel.parameters["angle_status"])
+        self.assertEqual((10.0, 0.0), (bevel.anchors[0].x, bevel.anchors[0].y))
+        self.assertIn("F2", bevel.source_ids)
+
+    def test_does_not_infer_bevel_from_congruent_principal_faces(self):
+        points = ((10, 20), (210, 20), (210, 120), (10, 120))
+        result = self.recognize(self.v2_with_principal_faces(points, points))
+
+        self.assertNotIn("BEVEL", [item.feature_type.value for item in result.features])
+        self.assertEqual("OK", result.status.value)
+
+    def test_reviews_principal_face_topology_mismatch_instead_of_guessing_bevel(self):
+        snapshot = self.v2_with_principal_faces(
+            ((10, 20), (210, 20), (210, 120), (10, 120)),
+            ((20, 20), (210, 20), (210, 120)),
+        )
+
+        result = self.recognize(snapshot)
+
+        self.assertNotIn("BEVEL", [item.feature_type.value for item in result.features])
+        self.assertEqual("REVIEW_REQUIRED", result.status.value)
+
+    def test_reviews_multiple_principal_face_offsets_instead_of_guessing_bevel(self):
+        snapshot = self.v2_with_principal_faces(
+            ((10, 20), (210, 20), (210, 120), (10, 120)),
+            ((20, 30), (200, 30), (200, 110), (20, 110)),
+        )
+
+        result = self.recognize(snapshot)
+
+        self.assertNotIn("BEVEL", [item.feature_type.value for item in result.features])
+        self.assertEqual("REVIEW_REQUIRED", result.status.value)
+
+    def v2_with_principal_faces(self, top_xy, bottom_xy):
+        top = tuple(Point3D(x, y, 30.0) for x, y in top_xy)
+        bottom = tuple(Point3D(x, y, 20.0) for x, y in bottom_xy)
+        edges = []
+        faces = []
+        edge_index = 0
+        for face_id, normal, points in (
+            ("F1", Vector3D(0, 0, 1), top),
+            ("F2", Vector3D(0, 0, -1), bottom),
+        ):
+            edge_ids = []
+            for index, start in enumerate(points):
+                edge_index += 1
+                edge_id = f"E{edge_index}"
+                edge_ids.append(edge_id)
+                edges.append(SolidEdgeSnapshot(
+                    edge_id=edge_id,
+                    curve_type="LINE",
+                    start=start,
+                    end=points[(index + 1) % len(points)],
+                    adjacent_face_ids=(face_id,),
+                    evidence_status="PROVEN",
+                ))
+            faces.append(SolidFaceSnapshot(
+                face_id=face_id,
+                surface_type="PLANE",
+                normal=normal,
+                relation_to_part_frame=(
+                    "NORMAL_POSITIVE" if face_id == "F1" else "NORMAL_NEGATIVE"
+                ),
+                loops=(SolidLoopSnapshot(
+                    loop_id=f"L{face_id[1:]}",
+                    ordered_edge_ids=tuple(edge_ids),
+                    ordered_vertices=points,
+                ),),
+            ))
+        return replace(
+            self.base,
+            schema_version="partDrawingSnapshot.v2",
+            exporter_version="test-fixture.v2",
+            part_form="FLAT_PLATE",
+            final_geometry=SolidGeometrySnapshot(
+                edges=tuple(edges),
+                faces=tuple(faces),
+                principal_face_ids=("F1", "F2"),
+            ),
+        )
 
 
 if __name__ == "__main__":

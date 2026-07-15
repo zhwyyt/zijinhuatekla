@@ -9,8 +9,11 @@
 - [x] 完成 fixture smoke 和全量回归，证据见 `docs/verification/2026-07-13-offline-part-drawing-engine.md`。
 - [x] 按 `零件标注.dwg` 固化 `partCadDimensionStyle.v1`，DXF 改为原生 `DIMENSION`，PDF 共用语义尺寸和样式；真实 `T3-PX-317` 已验证 13 个原生尺寸、audit `0/0`，证据见 `docs/verification/2026-07-13-part-drawing-cad-dimension-style.md`。
 - [x] 将真实 `T3-PX-317` 剩余 7 个逐孔定位尺寸收敛为先规划后避让的孔阵连续链：X 链 `60/90/90/60`、Y 链 `93.174/90/60.001`，总尺寸位于外层，孔组引出合并为 `6-Ø27`；真实 smoke 为 `OK=1`、10 个原生 `DIMENSION`、audit `0/0`，证据见 `docs/verification/2026-07-14-part-drawing-dimension-planner.md`。
-- [ ] 在 Tekla 导出器实现 `partDrawingSnapshot.v1` 生产端。
-- [ ] 用真实 Tekla 平板零件完成首轮快照与 DXF/PDF 人工复核。
+- [x] 在 Tekla 导出器实现 `partDrawingSnapshot.v2` 生产端，并保持 v1 消费兼容；完整导出 final solid、双 principal faces 和 Boolean operative solid。
+- [x] 建立 C# 实际序列化 JSON 到 Python 的跨语言 v2 契约测试，不使用字段转换脚本。
+- [x] 实现双主面唯一单边退让坡口识别及反例质量门，输出 `BEVEL` 图层和 drawing JSON evidence。
+- [x] 用真实 `T3-PX-317` 完成 v2 快照与 DXF/PDF 复核：12 条中心线、1 个 `MULTILEADER 6Φ27`、1 条坡口线、audit `0/0`。
+- [ ] 收集真实折弯、原生圆弧、切角和弧形切口样件，逐类补自动出图设计与验收；在此之前只标记契约可承载。
 
 - [x] 建立可复用规则层：规格标准化、PL 解析、名义加工尺寸、BH 拆板派生。
 - [x] 建立 Excel/Tekla bundle 对齐层：按零件号、规格、长度、几何候选匹配。
