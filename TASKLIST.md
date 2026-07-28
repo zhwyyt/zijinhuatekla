@@ -5,6 +5,7 @@
 - [x] 完成 C# 构建/测试和 Python 跨语言契约回归：C# 26 tests、Python focused 11 tests、完整 165 tests。
 - [x] 用真实 Tekla 平板 `T3-PX-317` 跑通 snapshot -> DXF/PDF：导出 EXPORTED=1，出图 REVIEW_REQUIRED=1，DXF audit 0/0，PDF A3 单页。
 - [ ] 修复/提升孔径与孔定位尺寸布局：当前 17 annotations unplaced，图纸保持 REVIEW_REQUIRED。
+- [ ] 建立零件图子技能架构：参考 SolidWorks `autocad-automation` 子技能模式，将离线出图 5 个模块抽成 6 个独立子技能（snapshot-exporter、geometry-normalizer、feature-recognizer、dimension-generator、layout-optimizer、drawing-renderer），每个子技能有独立 SKILL.md、契约 schema、约束规则和典型错误库；设计见 `docs/design/2026-07-28-part-drawing-subskills-architecture.md`。
 - [ ] 补 ARC 原生圆心证据导出与真实弧形平板验收；无法证明的曲线继续拒绝。
 - [ ] 用真实 Tekla 平板选择集跑通 snapshot -> DXF/PDF，并完成人工图面复核后再决定是否合并 PR #1。
 - [x] 建立可复用规则层：规格标准化、PL 解析、名义加工尺寸、BH 拆板派生。
