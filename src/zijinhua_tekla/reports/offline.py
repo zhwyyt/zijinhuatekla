@@ -90,7 +90,12 @@ class OfflineReportPaths:
         )
 
 
-def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, member_id: str) -> OfflineReportPaths:
+def write_offline_analysis_report(
+    result: OfflinePipelineResult,
+    out_dir: Path,
+    member_id: str,
+    include_drawings: bool = False,
+) -> OfflineReportPaths:
     out_dir.mkdir(parents=True, exist_ok=True)
     csv_path = out_dir / f"{member_id}-alignment.csv"
     json_path = out_dir / f"{member_id}-alignment.json"
@@ -208,10 +213,11 @@ def write_offline_analysis_report(result: OfflinePipelineResult, out_dir: Path, 
         _build_box_assembly_drawing_steps_markdown(member_id, box_assembly_drawing_steps["steps"]),
         encoding="utf-8",
     )
-    box_assembly_drawing_steps_dxf_path.write_text(
-        build_box_assembly_drawing_steps_dxf(box_assembly_drawing_steps),
-        encoding="utf-8",
-    )
+    if include_drawings:
+        box_assembly_drawing_steps_dxf_path.write_text(
+            build_box_assembly_drawing_steps_dxf(box_assembly_drawing_steps),
+            encoding="utf-8",
+        )
     box_station_topology_diagnostics = [item.to_dict() for item in result.box_station_topology_diagnostics]
     box_station_topology_diagnostics_path.write_text(
         json.dumps(box_station_topology_diagnostics, ensure_ascii=False, indent=2),

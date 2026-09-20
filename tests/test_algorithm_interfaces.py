@@ -3,6 +3,7 @@ import unittest
 from zijinhua_tekla.casebank import CaseFeedback, CaseIssueType, CaseBank
 from zijinhua_tekla.features import feature_snapshots_from_bundle_parts
 from zijinhua_tekla.member_classifier import classify_member_body
+from zijinhua_tekla.contracts.normalized import NormalizedPart
 from zijinhua_tekla.part_roles import classify_part_role
 from zijinhua_tekla.bracket_classifier import (
     AppendageClusterFeatures,
@@ -28,6 +29,21 @@ class AlgorithmInterfaceTests(unittest.TestCase):
         self.assertIn("member.Classification.MainClass", result.evidence_codes)
         self.assertIn("BOX 960x970", result.description)
 
+    def test_member_body_classifier_uses_key_dimensions_when_main_class_is_numeric(self):
+        member = {
+            "Member": {"Name": "T3-5GKZ-10"},
+            "Classification": {
+                "MainClass": 2,
+                "KeyDimensionsDisplay": "BOX 1032x970x16x16",
+                "Confidence": 99,
+            },
+        }
+
+        result = classify_member_body(member, [])
+
+        self.assertEqual("BOX", result.body_type)
+        self.assertIn("member.Classification.KeyDimensionsDisplay", result.evidence_codes)
+
     def test_member_body_classifier_infers_bh_profile_from_snapshots(self):
         member = {"Member": {"Name": "A1-GKL-01"}, "Classification": {}}
         snapshots = feature_snapshots_from_bundle_parts(
@@ -50,17 +66,20 @@ class AlgorithmInterfaceTests(unittest.TestCase):
         self.assertIn("snapshot.profile.BH", result.evidence_codes)
 
     def test_part_role_classifier_returns_evidence_not_special_case(self):
-        row = {"零件名称": "T3-P-4869", "规格": "PL14*243", "长度": 281, "备注": "激光"}
-        summary = {
-            "tekla_names": "连接板:1",
-            "bolt_holes": 1,
-            "boolean_cuts": 0,
-            "contour_vertices": 4,
-            "has_arc_contour": True,
-            "is_special_shape": False,
-        }
-
-        result = classify_part_role(row, summary)
+        result = classify_part_role(
+            NormalizedPart(
+                part_id="4869",
+                part_position="T3-P-4869",
+                name="连接板",
+                profile="PL14*243",
+                length=281,
+                width=243,
+                thickness=14,
+                bolt_hole_count=1,
+                contour_vertex_count=4,
+                contour_points=((0, 0, 0), (281, 0, 0), (281, 243, 0), (0, 243, 0)),
+            )
+        )
 
         self.assertEqual("连接板", result.role)
         self.assertEqual("下料割孔", result.process)
@@ -69,18 +88,19 @@ class AlgorithmInterfaceTests(unittest.TestCase):
         self.assertIn("Tekla名称=连接板", result.evidence)
 
     def test_part_role_classifier_uses_generic_pr_mark_not_project_prefix(self):
-        row = {"零件名称": "A1-PR-42", "规格": "PL12*160", "长度": 280, "备注": ""}
-        summary = {
-            "tekla_names": "",
-            "bolt_holes": 2,
-            "boolean_cuts": 0,
-            "contour_vertices": 4,
-            "concave_corners": 0,
-            "has_arc_contour": False,
-            "is_special_shape": False,
-        }
-
-        result = classify_part_role(row, summary)
+        result = classify_part_role(
+            NormalizedPart(
+                part_id="42",
+                part_position="A1-PR-42",
+                profile="PL12*160",
+                length=280,
+                width=160,
+                thickness=12,
+                bolt_hole_count=2,
+                contour_vertex_count=4,
+                contour_points=((0, 0, 0), (280, 0, 0), (280, 160, 0), (0, 160, 0)),
+            )
+        )
 
         self.assertEqual("对接耳板/连接小板", result.role)
         self.assertEqual("下料割孔", result.process)

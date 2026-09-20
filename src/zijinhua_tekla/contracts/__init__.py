@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .member import MemberBodyType, MemberRecord, MemberType
 from .part import PartFeatureSnapshot, PartRecord
+from .normalized import NormalizedMemberDocument, NormalizedPart, PartSpatialHints
 from .assembly import AssemblyRecord, Relationship
 from .role import Evidence, PartRole
 from .process import ProcessRoute, ProcessType
@@ -12,6 +13,7 @@ from .sequence import AssemblyStep, DimensionAnnotation
 __all__ = [
     "MemberType", "MemberBodyType", "MemberRecord",
     "PartRecord", "PartFeatureSnapshot",
+    "NormalizedPart", "NormalizedMemberDocument", "PartSpatialHints",
     "AssemblyRecord", "Relationship",
     "PartRole", "Evidence",
     "ProcessType", "ProcessRoute",

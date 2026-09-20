@@ -330,7 +330,7 @@ class OfflineReportTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            paths = write_offline_analysis_report(result, Path(temp_dir), "A-GKZ-1")
+            paths = write_offline_analysis_report(result, Path(temp_dir), "A-GKZ-1", include_drawings=True)
 
             csv_rows = pd.read_csv(paths.csv_path)
             json_rows = json.loads(paths.json_path.read_text(encoding="utf-8"))

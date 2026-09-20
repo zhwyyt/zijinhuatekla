@@ -85,7 +85,7 @@ def classify_member_body(member: dict[str, Any], snapshots: list[Any]) -> Member
     description = text(classification.get("KeyDimensionsDisplay"))
     confidence = _normalize_confidence(classification.get("Confidence"))
 
-    if raw_code:
+    if raw_code and not raw_code.isdigit():
         return MemberBodyClassification(
             member_id=member_id,
             body_type=raw_code,

@@ -7,6 +7,7 @@ from zijinhua_tekla.classifiers import (
     classify_member,
     classify_part,
 )
+from zijinhua_tekla.contracts.normalized import NormalizedPart
 
 
 class ClassifiersFacadeTests(unittest.TestCase):
@@ -21,16 +22,17 @@ class ClassifiersFacadeTests(unittest.TestCase):
             [],
         )
         part_result = facade.classify_part(
-            {"零件名称": "A-P-1", "规格": "PL12*160", "长度": 280, "备注": ""},
-            {
-                "tekla_names": "连接板:1",
-                "bolt_holes": 2,
-                "boolean_cuts": 0,
-                "contour_vertices": 4,
-                "concave_corners": 0,
-                "has_arc_contour": False,
-                "is_special_shape": False,
-            },
+            NormalizedPart(
+                part_id="1",
+                part_position="A-P-1",
+                name="连接板",
+                profile="PL12*160",
+                length=280,
+                width=160,
+                thickness=12,
+                bolt_hole_count=2,
+                contour_vertex_count=4,
+            )
         )
         appendage_result = facade.classify_appendage(
             AppendageClusterFeatures(
@@ -55,16 +57,16 @@ class ClassifiersFacadeTests(unittest.TestCase):
             [{"profile": "BH400*200*7*10"}],
         )
         part_result = classify_part(
-            {"零件名称": "A-PR-1", "规格": "PL10*100", "长度": 200, "备注": ""},
-            {
-                "tekla_names": "",
-                "bolt_holes": 2,
-                "boolean_cuts": 0,
-                "contour_vertices": 4,
-                "concave_corners": 0,
-                "has_arc_contour": False,
-                "is_special_shape": False,
-            },
+            NormalizedPart(
+                part_id="2",
+                part_position="A-PR-1",
+                profile="PL10*100",
+                length=200,
+                width=100,
+                thickness=10,
+                bolt_hole_count=2,
+                contour_vertex_count=4,
+            )
         )
         appendage_result = classify_appendage(AppendageClusterFeatures(cluster_id="weak"))
 

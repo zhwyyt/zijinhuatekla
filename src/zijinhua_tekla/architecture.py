@@ -14,15 +14,15 @@ class ArchitectureLayer:
 ARCHITECTURE_LAYERS: tuple[ArchitectureLayer, ...] = (
     ArchitectureLayer(
         name="adapters",
-        responsibility="Read source-specific Tekla bundle, Excel, teklatest, plugin, or MCP data and normalize it.",
+        responsibility="Read Tekla dump into NormalizedMemberDocument; optionally read factory Excel for compare only.",
         allowed_inputs=("Tekla bundle JSON", "member JSON", "Excel truth rows", "teklatest PartFeatures", "future MCP/plugin data"),
-        outputs=("source-neutral records",),
+        outputs=("NormalizedMemberDocument", "factory truth rows"),
     ),
     ArchitectureLayer(
         name="quality",
-        responsibility="Detect data missing, exact-number conflicts, review-only geometry candidates, and model/manufacturing mouthpiece differences.",
-        allowed_inputs=("source-neutral records", "aligned rows"),
-        outputs=("DataQualityReport",),
+        responsibility="Compare recognition Excel to factory workbook. Never feeds classifiers.",
+        allowed_inputs=("recognition rows", "factory truth rows"),
+        outputs=("DataQualityReport", "DiffReport"),
     ),
     ArchitectureLayer(
         name="features",
@@ -39,7 +39,7 @@ ARCHITECTURE_LAYERS: tuple[ArchitectureLayer, ...] = (
     ArchitectureLayer(
         name="classifiers",
         responsibility="Classify member body, part role, bracket, process, and shape from features/evidence.",
-        allowed_inputs=("PartFeatureSnapshot", "spatial evidence", "quality report"),
+        allowed_inputs=("NormalizedPart", "PartFeatureSnapshot", "spatial evidence"),
         outputs=("label", "confidence", "evidence"),
     ),
     ArchitectureLayer(
@@ -58,7 +58,7 @@ ARCHITECTURE_LAYERS: tuple[ArchitectureLayer, ...] = (
         name="reports",
         responsibility="Write CSV, JSON, Markdown, and future drawing annotations from pipeline results.",
         allowed_inputs=("PipelineResult",),
-        outputs=("human-readable reports", "machine-readable outputs"),
+        outputs=("recognition Excel", "compare reports"),
     ),
 )
 

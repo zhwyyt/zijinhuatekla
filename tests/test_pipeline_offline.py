@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from zijinhua_tekla.pipeline.offline import run_offline_analysis
+from zijinhua_tekla.pipeline.offline import run_model_recognition, run_offline_analysis
 
 
 class OfflinePipelineTests(unittest.TestCase):
@@ -110,6 +110,20 @@ class OfflinePipelineTests(unittest.TestCase):
                                         },
                                         "volume": 10000000.0,
                                         "obbDims": {"x": 200.0, "y": 100.0, "z": 10.0},
+                                        "contourVertexCount": 4,
+                                        "concaveCornerCount": 0,
+                                        "contourPoints": [
+                                            {"x": 0.0, "y": 0.0, "z": 0.0},
+                                            {"x": 200.0, "y": 0.0, "z": 0.0},
+                                            {"x": 200.0, "y": 100.0, "z": 0.0},
+                                            {"x": 0.0, "y": 100.0, "z": 0.0},
+                                        ],
+                                        "contourSegments": [
+                                            {"chamferType": "CHAMFER_NONE"},
+                                            {"chamferType": "CHAMFER_NONE"},
+                                            {"chamferType": "CHAMFER_NONE"},
+                                            {"chamferType": "CHAMFER_NONE"},
+                                        ],
                                     },
                                     {
                                         "partId": "10",
@@ -186,7 +200,7 @@ class OfflinePipelineTests(unittest.TestCase):
                         "Q355B",
                         "",
                         "下料",
-                        "异形",
+                        "方块",
                         "",
                         "",
                         "",
@@ -210,7 +224,14 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual(1, len(result.aligned_rows))
         self.assertEqual("A-P-1", result.aligned_rows[0]["零件名称"])
         self.assertEqual("MATCH", result.aligned_rows[0]["prediction_status"])
-        self.assertEqual("连接板", result.aligned_rows[0]["predicted_role"])
+        self.assertEqual("箱型柱主材壁板", result.aligned_rows[0]["predicted_role"])
+        self.assertEqual("下料", result.aligned_rows[0]["predicted_process"])
+        self.assertEqual("方块", result.aligned_rows[0]["predicted_shape"])
+        recognition_by_position = {row["零件名称"]: row for row in result.recognition_rows}
+        self.assertEqual("箱型柱主材壁板", recognition_by_position["A-P-1"]["predicted_role"])
+        self.assertEqual("BOX主壁板", recognition_by_position["A-P-1"]["主材"])
+        self.assertEqual(0, recognition_by_position["A-P-1"]["牛腿实体个数"])
+        self.assertEqual("下料", recognition_by_position["A-P-1"]["工序"])
         self.assertTrue(result.quality_report.is_clean)
         self.assertEqual(1, len(result.spatial_classifications))
         self.assertEqual("ConnectionPlate", result.spatial_classifications[0].role)
@@ -226,9 +247,7 @@ class OfflinePipelineTests(unittest.TestCase):
             "BOX_MAIN_WALL_PLATE",
             result.composite_main_material_segments[0].main_plates[0].primary_role.value,
         )
-        self.assertTrue(result.box_assembly_drawing_steps)
-        self.assertEqual("BASE_MAIN_WALL", result.box_assembly_drawing_steps[0].step_type)
-        self.assertEqual("A-P-1", result.box_assembly_drawing_steps[0].part_mark_targets[0].part_position)
+        self.assertEqual([], result.box_assembly_drawing_steps)
 
     def test_run_offline_analysis_outputs_h_beam_part_sides_for_gl_member(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -320,6 +339,11 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual("H_TOP_FLANGE_MAIN_PLATE", composite_roles["A-P-top"])
         self.assertEqual("H_WEB_MAIN_PLATE", composite_roles["A-P-web"])
         self.assertEqual("H_BOTTOM_FLANGE_MAIN_PLATE", composite_roles["A-P-bottom"])
+        recognition_by_position = {row["零件名称"]: row for row in result.recognition_rows}
+        self.assertEqual("H上翼缘", recognition_by_position["A-P-top"]["主材"])
+        self.assertEqual("H腹板", recognition_by_position["A-P-web"]["主材"])
+        self.assertEqual("H下翼缘", recognition_by_position["A-P-bottom"]["主材"])
+        self.assertEqual("否", recognition_by_position["A-P-lift"]["主材"])
 
 
 if __name__ == "__main__":
