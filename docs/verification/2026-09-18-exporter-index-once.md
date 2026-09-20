@@ -68,3 +68,23 @@ cd I:\xingcaisuanfa
 git checkout rollback/exporter-0.3.3-index-once-20260920
 dotnet build .\TeklaSectionClassifier.Runner\TeklaSectionClassifier.Runner.csproj -c Debug
 ```
+
+## 2026-09-20 选择集实测（0.3.4）
+
+当前选择集 289 根装配（含先前 16 根 `T3-5GKZ` 箱型柱 + 273 根梁为主的选择，另有少量新件）。`assemblyPosition` 重复 13 个号、18 根装配，member JSON 271 份。
+
+- dump：`I:\xingcaisuanfa\cache\20260920_single_pass_smoke`
+- 版本：`xingcai-runner-body-bracket-0.3.4-single-pass`，schema 仍 `v2-plate-face`
+- 墙钟约 11.2 min；剖口索引 9.8s / 3697 父零件；装配循环 355s（含关采样后的 Extract+Bundle）
+- 271 份 member JSON 的 `Samples` 全部为 0
+- 与 `20260920_index_once_smoke` 重叠 16、`smoke2` 重叠 273、`20260918_plate_cuts_batch` 重叠 264：`edgeBevelCount` **全部 0 条差异**
+- 识别：`outputs/model-first-single-pass-smoke/recognition-all.xlsx`，4044 行，失败 0；方块且倒角/洞口 = 0；剖口=是 468；方块且剖口 48
+
+### 叠层副作用（已改代码，当前 dump 未重导）
+
+关采样后 `FirstPassMemberClassifier` 对无型材直读的组合截面会落到 Irregular。本版用 bundle 闭合环叠成 Box。实测 bundle 上 **闭合环+H frame 同时存在 188 根**（16 根 GKZ 全是双证据），叠层无条件优先 Box，把大量 `T3-6GL` 的 H 翼缘/腹板标成 `BOX主壁板`：
+
+- 与 smoke2 重叠零件 2335 行，主材列差异 416
+- 其中 `H上翼缘/H腹板/H下翼缘 → BOX主壁板` 各 116 行，均在 `6GL`
+
+已把叠层改成 **只在单一证据时生效**：仅闭合环→Box，仅 H frame→H，双证据不覆盖。当前 Excel 的 `6GL` 主材列不要用。重导后才会带上该修复。
