@@ -26,6 +26,7 @@ from ..classifiers.composite_main_material_segments import (
 )
 from ..classifiers.corbel_units import CorbelUnit, classify_corbel_units
 from ..classifiers.h_beam_part_sides import HBeamPartSide, classify_h_beam_part_sides
+from ..classifiers.weld_backing import classify_weld_backing_plates
 from ..contracts.normalized import NormalizedPart, PartSpatialHints
 from ..features import feature_snapshots_from_bundle_parts
 from ..quality.gate import DataQualityReport, quality_report_from_aligned_rows
@@ -95,6 +96,7 @@ def run_model_recognition(
         composite_main_material_segments,
         box_part_spatial_relations,
         spatial_classifications,
+        classify_weld_backing_plates(assembly),
     )
     corbel_units = classify_corbel_units(assembly, spatial_classifications)
     recognition_rows = _recognition_rows(member_id, document.parts, hints_by_id, len(corbel_units))
@@ -234,6 +236,7 @@ def _hints_by_part_id(
     composite_segments: list[CompositeMainMaterialSegment],
     box_relations: list[BoxPartSpatialRelation],
     spatial_classifications: list[Any],
+    weld_backing: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, PartSpatialHints]:
     main_role_by_id: dict[str, str] = {}
     for segment in composite_segments:
@@ -251,13 +254,17 @@ def _hints_by_part_id(
         for part_id in getattr(cluster, "part_ids", []):
             if text(part_id):
                 appendage_by_id[text(part_id)] = role
+    weld_backing = weld_backing or {}
     hints: dict[str, PartSpatialHints] = {}
     for part in parts:
+        backing_evidence = weld_backing.get(part.part_id, ())
         hints[part.part_id] = PartSpatialHints(
             member_body_type=member_body_type,
             relation_to_box_body=relation_by_id.get(part.part_id, ""),
             main_material_role=main_role_by_id.get(part.part_id, ""),
             appendage_role=appendage_by_id.get(part.part_id, ""),
+            weld_backing=bool(backing_evidence),
+            weld_backing_evidence=backing_evidence,
         )
     return hints
 

@@ -199,7 +199,7 @@ class OfflinePipelineTests(unittest.TestCase):
                         1.0,
                         "Q355B",
                         "",
-                        "下料",
+                        "工序1：下料",
                         "方块",
                         "",
                         "",
@@ -225,13 +225,13 @@ class OfflinePipelineTests(unittest.TestCase):
         self.assertEqual("A-P-1", result.aligned_rows[0]["零件名称"])
         self.assertEqual("MATCH", result.aligned_rows[0]["prediction_status"])
         self.assertEqual("箱型柱主材壁板", result.aligned_rows[0]["predicted_role"])
-        self.assertEqual("下料", result.aligned_rows[0]["predicted_process"])
+        self.assertEqual("工序1：下料", result.aligned_rows[0]["predicted_process"])
         self.assertEqual("方块", result.aligned_rows[0]["predicted_shape"])
         recognition_by_position = {row["零件名称"]: row for row in result.recognition_rows}
         self.assertEqual("箱型柱主材壁板", recognition_by_position["A-P-1"]["predicted_role"])
         self.assertEqual("BOX主壁板", recognition_by_position["A-P-1"]["主材"])
         self.assertEqual(0, recognition_by_position["A-P-1"]["牛腿实体个数"])
-        self.assertEqual("下料", recognition_by_position["A-P-1"]["工序"])
+        self.assertEqual("工序1：下料", recognition_by_position["A-P-1"]["工序"])
         self.assertTrue(result.quality_report.is_clean)
         self.assertEqual(1, len(result.spatial_classifications))
         self.assertEqual("ConnectionPlate", result.spatial_classifications[0].role)
@@ -308,7 +308,7 @@ class OfflinePipelineTests(unittest.TestCase):
                         1.0,
                         "Q355B",
                         "",
-                        "下料",
+                        "工序1：下料",
                         "方块",
                         "",
                         "",

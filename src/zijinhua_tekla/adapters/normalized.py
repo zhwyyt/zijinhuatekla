@@ -71,7 +71,37 @@ def normalized_part_from_bundle_part(
         end_chamfer_count=end_chamfer_count,
         has_end_chamfer=has_end_chamfer,
         relationship_counts=rel_items,
+        declared_process=_declared_process(part),
     )
+
+
+def _declared_process(part: Mapping[str, Any]) -> str:
+    explicit = text(part.get("工序") or part.get("declaredProcess"))
+    if explicit:
+        return explicit
+    for key, value in _custom_property_items(part.get("customProperties")):
+        token = text(value)
+        if not token:
+            continue
+        key_text = text(key)
+        if "工序" in key_text or key_text.lower() in {"process", "shopprocess"}:
+            return token
+        if token == "不下":
+            return "不下"
+    return ""
+
+
+def _custom_property_items(properties: Any) -> list[tuple[Any, Any]]:
+    if isinstance(properties, Mapping):
+        return list(properties.items())
+    if isinstance(properties, list):
+        items: list[tuple[Any, Any]] = []
+        for item in properties:
+            if not isinstance(item, Mapping):
+                continue
+            items.append((item.get("name") or item.get("key") or "", item.get("value")))
+        return items
+    return []
 
 
 def _contour_points(part: Mapping[str, Any]) -> tuple[tuple[float, float, float], ...]:

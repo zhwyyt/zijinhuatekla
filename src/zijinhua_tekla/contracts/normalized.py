@@ -34,6 +34,7 @@ class NormalizedPart:
     end_chamfer_count: int = 0
     has_end_chamfer: bool = False
     relationship_counts: tuple[tuple[str, int], ...] = ()
+    declared_process: str = ""
 
     def rel_count(self, edge_type: str) -> int:
         wanted = edge_type.lower()
@@ -58,3 +59,5 @@ class PartSpatialHints:
     relation_to_box_body: str = ""
     main_material_role: str = ""
     appendage_role: str = ""
+    weld_backing: bool = False
+    weld_backing_evidence: tuple[str, ...] = ()

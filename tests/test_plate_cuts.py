@@ -117,7 +117,7 @@ class PlateCutsTests(unittest.TestCase):
         self.assertEqual(0, roles.foreign_count)
 
     def test_plate_blanking_with_hole_uses_opening_evidence(self):
-        process, evidence = classify_shop_process(
+        result = classify_shop_process(
             profile="PL14*243",
             runtime_type="ContourPlate",
             is_plate_like=True,
@@ -126,8 +126,8 @@ class PlateCutsTests(unittest.TestCase):
             bolt_hole_count=1,
             hole_like_feature_count=1,
         )
-        self.assertEqual("下料割孔", process)
-        self.assertEqual(["洞口"], evidence)
+        self.assertEqual("工序1：下料；工序2：下料钻孔", result.combined)
+        self.assertIn("螺栓孔", result.evidence)
 
 
 if __name__ == "__main__":

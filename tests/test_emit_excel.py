@@ -38,7 +38,7 @@ class EmitExcelTests(unittest.TestCase):
             PartSpatialHints(relation_to_box_body="MAIN_WALL"),
         )
         self.assertEqual("箱型柱主材壁板", result.role)
-        self.assertEqual("下料", result.process)
+        self.assertEqual("工序1：下料", result.process)
         self.assertEqual("方块", result.shape)
 
     def test_box_main_wall_label_wins_over_composite_h_role(self):
@@ -98,8 +98,12 @@ class EmitExcelTests(unittest.TestCase):
         self.assertEqual("箱型柱主材壁板", wall["predicted_role"])
         self.assertEqual("BOX主壁板", wall["主材"])
         self.assertEqual(0, wall["牛腿实体个数"])
-        self.assertEqual("下料", wall["工序"])
+        self.assertEqual("工序1：下料", wall["工序"])
         self.assertEqual("方块", wall["形状分类"])
+        backing = next(row for row in result.recognition_rows if row["零件名称"] == "A-P-2")
+        self.assertEqual("焊接垫板", backing["predicted_role"])
+        self.assertEqual("工序1：下料", backing["工序"])
+        self.assertNotEqual("不下", backing["工序"])
         self.assertEqual("model-recognition.v1", sidecar["source"])
         self.assertEqual(0, sidecar["corbel"]["unit_count"])
         self.assertEqual("A-GKZ-1", sidecar["member_id"])
@@ -196,9 +200,41 @@ def _write_box_cache(cache_root: Path) -> None:
                                         "projectedBoundsMax": {"u": 240, "v": 250},
                                     },
                                 },
-                            }
+                            },
+                            {
+                                "partId": "2",
+                                "partPosition": "A-P-2",
+                                "name": "板",
+                                "profileString": "PL8*25",
+                                "material": "Q355B",
+                                "length": 200,
+                                "thickness": 8,
+                                "isPlateLike": True,
+                                "obbDims": {"x": 200.0, "y": 25.0, "z": 8.0},
+                                "boltHoleCount": 0,
+                                "centroid": {"x": 100.0, "y": 12.5, "z": 4.0},
+                                "weldDetails": [
+                                    {
+                                        "mainPartId": "1",
+                                        "secondaryPartId": "2",
+                                        "weldType": "Weld",
+                                        "sizeAbove": 6,
+                                        "sizeBelow": 0,
+                                        "shopWeld": True,
+                                        "aroundWeld": True,
+                                    }
+                                ],
+                            },
                         ],
-                        "relationships": [],
+                        "relationships": [
+                            {
+                                "partIdA": "1",
+                                "partIdB": "2",
+                                "edgeType": "Weld",
+                                "meta": "Weld|shop=True|sizeAbove=6|sizeBelow=0|around=True",
+                            },
+                            {"partIdA": "1", "partIdB": "2", "edgeType": "Contact"},
+                        ],
                     }
                 ]
             },

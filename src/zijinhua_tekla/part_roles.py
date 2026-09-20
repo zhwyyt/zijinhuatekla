@@ -63,6 +63,8 @@ class PartRoleResult:
     shape: str
     confidence: float
     evidence: list[str] = field(default_factory=list)
+    process_primary: str = ""
+    process_secondary: str = ""
 
 
 def contains_any(value: str, keywords: list[str]) -> bool:
@@ -96,6 +98,9 @@ def infer_role(part: NormalizedPart, hints: PartSpatialHints | None = None) -> t
     if hints.main_material_role in _CROSS_MAIN_ROLES:
         evidence.append("组合截面主板")
         return "板件", evidence
+    if hints.weld_backing:
+        evidence.extend(hints.weld_backing_evidence or ("焊缝垫板几何",))
+        return "焊接垫板", evidence
     if hints.appendage_role == "Bracket":
         evidence.append("外侧附属件簇=Bracket")
         return "牛腿/钢梁相关件", evidence
@@ -121,9 +126,6 @@ def infer_role(part: NormalizedPart, hints: PartSpatialHints | None = None) -> t
     if series == "PX":
         evidence.append("编号系列=PX")
         return "现场件/封板类", evidence
-    if "衬垫板" in name or (pl and pl[1] <= 35 and length >= 800):
-        evidence.append("衬垫板名称/窄长垫板")
-        return "衬垫板", evidence
     if series == "PR":
         evidence.append("编号系列=PR")
         return "对接耳板/连接小板", evidence
@@ -161,9 +163,9 @@ def infer_role(part: NormalizedPart, hints: PartSpatialHints | None = None) -> t
     return "UNKNOWN", evidence
 
 
-def infer_process(part: NormalizedPart, role: str = "") -> tuple[str, list[str]]:
+def infer_process(part: NormalizedPart, role: str = "") -> tuple[str, str, str, list[str]]:
     _ = role
-    return classify_shop_process(
+    result = classify_shop_process(
         profile=part.profile,
         runtime_type=part.runtime_type,
         is_plate_like=part.is_plate_like,
@@ -174,7 +176,9 @@ def infer_process(part: NormalizedPart, role: str = "") -> tuple[str, list[str]]
         boolean_cut_count=part.boolean_cut_count,
         edge_bevel_count=part.edge_bevel_count,
         end_chamfer_count=part.end_chamfer_count,
+        declared_process=part.declared_process,
     )
+    return result.combined, result.primary, result.secondary, list(result.evidence)
 
 
 def infer_shape(part: NormalizedPart, role: str = "", process: str = "", hints: PartSpatialHints | None = None) -> tuple[str, list[str]]:
@@ -222,7 +226,7 @@ def _confidence_from_evidence(part: NormalizedPart, evidence: list[str], hints: 
 
 def classify_part_role(part: NormalizedPart, hints: PartSpatialHints | None = None) -> PartRoleResult:
     role, role_evidence = infer_role(part, hints)
-    process, process_evidence = infer_process(part)
+    process, process_primary, process_secondary, process_evidence = infer_process(part)
     shape, shape_evidence = infer_shape(part, role=role, hints=hints)
     evidence = []
     for item in role_evidence + process_evidence + shape_evidence:
@@ -234,4 +238,6 @@ def classify_part_role(part: NormalizedPart, hints: PartSpatialHints | None = No
         shape=shape,
         confidence=_confidence_from_evidence(part, evidence, hints),
         evidence=evidence,
+        process_primary=process_primary,
+        process_secondary=process_secondary,
     )

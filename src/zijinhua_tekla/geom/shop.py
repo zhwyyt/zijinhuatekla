@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Sequence
 
-from ..rules import norm_spec
+from ..rules import norm_spec, text
 from .chamfer import classify_plan_outline
 from .planar import project_uv
 from .plate_cuts import rectangle_from_obb
@@ -72,6 +73,24 @@ def has_inner_opening(hole_like_feature_count: int, bolt_hole_count: int) -> boo
     return max(0, int(hole_like_feature_count) - int(bolt_hole_count)) > 0
 
 
+@dataclass(frozen=True)
+class ShopProcessResult:
+    primary: str = ""
+    secondary: str = ""
+    evidence: tuple[str, ...] = ()
+
+    @property
+    def combined(self) -> str:
+        if self.primary == "不下":
+            return "不下"
+        chunks = []
+        if self.primary:
+            chunks.append(f"工序1：{self.primary}")
+        if self.secondary:
+            chunks.append(f"工序2：{self.secondary}")
+        return "；".join(chunks)
+
+
 def remaining_cut_count(
     *,
     hole_like_feature_count: int,
@@ -97,33 +116,52 @@ def classify_shop_process(
     boolean_cut_count: int = 0,
     edge_bevel_count: int = 0,
     end_chamfer_count: int = 0,
-) -> tuple[str, list[str]]:
+    declared_process: str = "",
+) -> ShopProcessResult:
+    if text(declared_process) == "不下":
+        return ShopProcessResult(primary="不下", evidence=("零件信息写明不下",))
     spec = norm_spec(profile)
     plate = is_plate_like or spec.startswith("PL")
-    if not plate:
-        if spec.startswith("D"):
-            process, evidence = "挂钩", ["圆杆规格"]
-        elif _is_channel_profile(spec):
-            process, evidence = "成品槽", ["槽钢规格"]
-        elif is_section_profile(spec):
-            process, evidence = "不下", ["轧制型材"]
-        else:
-            process, evidence = "不下", ["非板件"]
-        if bolt_hole_count > 0 or remaining_cut_count(
-            hole_like_feature_count=hole_like_feature_count,
-            bolt_hole_count=bolt_hole_count,
-            boolean_cut_count=boolean_cut_count,
-            edge_bevel_count=edge_bevel_count,
-            end_chamfer_count=end_chamfer_count,
-        ):
-            evidence = evidence + ["洞口"]
-        return process, evidence
-
-    if is_folded_plate(obb_dims, thickness) or _runtime_bent(runtime_type):
-        return "下料折弯", ["板件出平面/折弯体"]
-    if bolt_hole_count > 0 or hole_like_feature_count > 0:
-        return "下料割孔", ["洞口"]
-    return "下料", ["平板无孔"]
+    openings = remaining_cut_count(
+        hole_like_feature_count=hole_like_feature_count,
+        bolt_hole_count=bolt_hole_count,
+        boolean_cut_count=boolean_cut_count,
+        edge_bevel_count=edge_bevel_count,
+        end_chamfer_count=end_chamfer_count,
+    ) > 0
+    if plate and not openings:
+        openings = has_inner_opening(hole_like_feature_count, bolt_hole_count)
+    folded = plate and (is_folded_plate(obb_dims, thickness) or _runtime_bent(runtime_type))
+    evidence: list[str] = []
+    primary = ""
+    if plate:
+        primary = "下料割孔" if openings else "下料"
+        evidence.append("下料割孔" if openings else "平板无孔")
+    elif openings:
+        primary = "下料割孔"
+        evidence.append("洞口")
+    elif spec.startswith("D"):
+        evidence.append("圆杆规格")
+    elif _is_channel_profile(spec):
+        evidence.append("槽钢规格")
+    elif is_section_profile(spec):
+        evidence.append("轧制型材")
+    else:
+        evidence.append("非板件")
+    secondary_parts: list[str] = []
+    if folded:
+        secondary_parts.append("下料折弯")
+        evidence.append("板件出平面/折弯体")
+    if bolt_hole_count > 0:
+        secondary_parts.append("下料钻孔")
+        evidence.append("螺栓孔")
+    elif openings and plate:
+        evidence.append("洞口")
+    return ShopProcessResult(
+        primary=primary,
+        secondary="+".join(secondary_parts),
+        evidence=tuple(dict.fromkeys(evidence)),
+    )
 
 
 def classify_shop_shape(

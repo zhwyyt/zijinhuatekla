@@ -82,7 +82,7 @@ class AlgorithmInterfaceTests(unittest.TestCase):
         )
 
         self.assertEqual("连接板", result.role)
-        self.assertEqual("下料割孔", result.process)
+        self.assertEqual("工序1：下料；工序2：下料钻孔", result.process)
         self.assertEqual("异形", result.shape)
         self.assertGreater(result.confidence, 0.5)
         self.assertIn("Tekla名称=连接板", result.evidence)
@@ -103,7 +103,7 @@ class AlgorithmInterfaceTests(unittest.TestCase):
         )
 
         self.assertEqual("对接耳板/连接小板", result.role)
-        self.assertEqual("下料割孔", result.process)
+        self.assertEqual("工序1：下料；工序2：下料钻孔", result.process)
         self.assertEqual("异形", result.shape)
         self.assertIn("编号系列=PR", result.evidence)
 

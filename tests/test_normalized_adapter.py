@@ -270,6 +270,28 @@ class NormalizedAdapterTests(unittest.TestCase):
         self.assertTrue(part.has_end_chamfer)
         self.assertEqual(1, part.end_chamfer_count)
 
+    def test_declared_process_from_custom_properties(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 21,
+                "partPosition": "A-P-21",
+                "profileString": "PL16*30",
+                "customProperties": {"工序": "不下"},
+            }
+        )
+        self.assertEqual("不下", part.declared_process)
+
+    def test_declared_process_from_property_list(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 22,
+                "partPosition": "A-P-22",
+                "profileString": "PL16*30",
+                "customProperties": [{"name": "工序", "value": "不下"}],
+            }
+        )
+        self.assertEqual("不下", part.declared_process)
+
 
 if __name__ == "__main__":
     unittest.main()

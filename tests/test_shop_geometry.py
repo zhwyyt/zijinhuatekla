@@ -7,7 +7,7 @@ from zijinhua_tekla.part_roles import classify_part_role
 
 class ShopGeometryTests(unittest.TestCase):
     def test_rectangle_without_holes_is_blanking_square(self):
-        process, _ = classify_shop_process(
+        process = classify_shop_process(
             profile="PL16*200",
             runtime_type="ContourPlate",
             is_plate_like=True,
@@ -15,7 +15,7 @@ class ShopGeometryTests(unittest.TestCase):
             obb_dims=(400, 200, 16),
             bolt_hole_count=0,
             hole_like_feature_count=0,
-        )
+        ).combined
         shape, evidence = classify_shop_shape(
             profile="PL16*200",
             runtime_type="ContourPlate",
@@ -26,7 +26,7 @@ class ShopGeometryTests(unittest.TestCase):
             concave_corner_count=0,
             contour_points=((0, 0, 0), (400, 0, 0), (400, 200, 0), (0, 200, 0)),
         )
-        self.assertEqual("下料", process)
+        self.assertEqual("工序1：下料", process)
         self.assertEqual("方块", shape)
         self.assertTrue(any("矩形" in item for item in evidence))
 
@@ -68,7 +68,7 @@ class ShopGeometryTests(unittest.TestCase):
                 contour_points=((0, 0, 0), (281, 0, 0), (281, 243, 0), (0, 243, 0)),
             )
         )
-        self.assertEqual("下料割孔", result.process)
+        self.assertEqual("工序1：下料；工序2：下料钻孔", result.process)
         self.assertEqual("异形", result.shape)
 
     def test_bevel_cut_on_rectangle_stays_square(self):
@@ -195,7 +195,7 @@ class ShopGeometryTests(unittest.TestCase):
             ),
             PartSpatialHints(member_body_type="BOX", relation_to_box_body="MAIN_WALL"),
         )
-        self.assertEqual("下料折弯", result.process)
+        self.assertEqual("工序1：下料割孔；工序2：下料折弯+下料钻孔", result.process)
         self.assertEqual("异形主材", result.shape)
 
     def test_role_keeps_square_when_part_has_edge_bevel(self):
@@ -231,7 +231,7 @@ class ShopGeometryTests(unittest.TestCase):
                 obb_dims=(389, 400, 200),
             )
         )
-        self.assertEqual("不下", result.process)
+        self.assertEqual("", result.process)
         self.assertEqual("", result.shape)
 
     def test_rolled_bh_end_bevel_is_reported_not_a_shape(self):
@@ -248,7 +248,7 @@ class ShopGeometryTests(unittest.TestCase):
                 edge_bevel_count=4,
             )
         )
-        self.assertEqual("不下", result.process)
+        self.assertEqual("", result.process)
         self.assertEqual("", result.shape)
         self.assertTrue(any("剖口" in item for item in result.evidence))
 
@@ -269,7 +269,7 @@ class ShopGeometryTests(unittest.TestCase):
                 has_edge_bevel=True,
             )
         )
-        self.assertEqual("不下", result.process)
+        self.assertEqual("工序1：下料割孔；工序2：下料钻孔", result.process)
         self.assertTrue(any("剖口" in item for item in result.evidence))
         self.assertTrue(any("洞口" in item for item in result.evidence))
 
@@ -288,9 +288,9 @@ class ShopGeometryTests(unittest.TestCase):
                 edge_bevel_count=1,
             )
         )
-        self.assertEqual("成品槽", channel.process)
-        self.assertTrue(any("剖口" in item for item in channel.evidence))
-        self.assertTrue(any("洞口" in item for item in channel.evidence))
+        self.assertEqual("工序2：下料钻孔", channel.process)
+        self.assertTrue(any("剖口" in item for item in channel.evidence) or any("槽钢" in item for item in channel.evidence))
+        self.assertTrue(any("螺栓孔" in item or "洞口" in item for item in channel.evidence))
 
         angle = classify_part_role(
             NormalizedPart(
@@ -304,7 +304,7 @@ class ShopGeometryTests(unittest.TestCase):
                 end_chamfer_count=1,
             )
         )
-        self.assertEqual("不下", angle.process)
+        self.assertEqual("", angle.process)
         self.assertTrue(any("倒角" in item for item in angle.evidence))
 
         pipe = classify_part_role(
@@ -321,7 +321,7 @@ class ShopGeometryTests(unittest.TestCase):
                 edge_bevel_count=1,
             )
         )
-        self.assertEqual("不下", pipe.process)
+        self.assertEqual("", pipe.process)
         self.assertTrue(any("剖口" in item for item in pipe.evidence))
         self.assertFalse(any("洞口" in item for item in pipe.evidence))
 
@@ -337,7 +337,7 @@ class ShopGeometryTests(unittest.TestCase):
                 hole_like_feature_count=2,
             )
         )
-        self.assertEqual("不下", rhs.process)
+        self.assertEqual("工序1：下料割孔", rhs.process)
         self.assertTrue(any("洞口" in item for item in rhs.evidence))
 
         ub = classify_part_role(
@@ -349,7 +349,7 @@ class ShopGeometryTests(unittest.TestCase):
                 obb_dims=(5000, 406, 178),
             )
         )
-        self.assertEqual("不下", ub.process)
+        self.assertEqual("", ub.process)
 
         chs = classify_part_role(
             NormalizedPart(
@@ -362,5 +362,34 @@ class ShopGeometryTests(unittest.TestCase):
                 edge_bevel_count=1,
             )
         )
-        self.assertEqual("不下", chs.process)
+        self.assertEqual("", chs.process)
         self.assertTrue(any("剖口" in item for item in chs.evidence))
+
+    def test_declared_no_nesting_is_the_only_不下(self):
+        result = classify_part_role(
+            NormalizedPart(
+                part_id="1",
+                part_position="A-P-1",
+                profile="PL16*200",
+                is_plate_like=True,
+                thickness=16,
+                obb_dims=(400, 200, 16),
+                declared_process="不下",
+            )
+        )
+        self.assertEqual("不下", result.process)
+        self.assertIn("零件信息写明不下", result.evidence)
+
+    def test_inner_opening_is_blanking_cut_not_drill(self):
+        result = classify_shop_process(
+            profile="PL16*968",
+            runtime_type="ContourPlate",
+            is_plate_like=True,
+            thickness=16,
+            obb_dims=(968, 968, 16),
+            bolt_hole_count=0,
+            hole_like_feature_count=1,
+        )
+        self.assertEqual("工序1：下料割孔", result.combined)
+        self.assertEqual("下料割孔", result.primary)
+        self.assertEqual("", result.secondary)
