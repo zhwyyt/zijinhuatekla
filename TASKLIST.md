@@ -6,6 +6,8 @@
 - [x] 0.3.4 关采样导致 6GL 主材错误；live 导出器已 revert 回 `0.3.3-index-once`。
 - [x] 0.3.5-solid-cache：世界坐标系 GetSolid 按零件缓存，5 个截面采样保留。
 - [x] 用 Tekla 选择集实测 0.3.5：289 装配，剖口与 MainClass 相对 0.3.3 均为 0 差异，5 个截面仍在。
+- [x] 导出器 0.3.6-workplane 已实测后不采用：bundle 仅少约 22s，墙钟几乎不变。
+- [x] live 导出器钉回 0.3.3-index-once：0.3.4/0.3.5/0.3.6 均不采用。
 - [x] 确认 Tekla 当前选择集零件图快照导出器设计：命令行独立模式、只处理直接选中的平板 Part、每实体一份 `partDrawingSnapshot.v1`、Python 单独出图。
 - [x] 在隔离 worktree `I:\tmp\xingcaisuanfa-part-snapshot-exporter` 按 TDD 实现 `--export-part-drawing-snapshots`、DTO、平板质量门、最终面环、孔槽与汇总输出。
 - [x] 完成 C# 构建/测试和 Python 跨语言契约回归：C# 26 tests、Python focused 11 tests、完整 165 tests。

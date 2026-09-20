@@ -110,3 +110,16 @@ dotnet build .\TeklaSectionClassifier.Runner\TeklaSectionClassifier.Runner.cspro
 - 271 份 member JSON 全部 **5 个截面样本**
 - 与 0.3.3 `index_once_smoke` 重叠 16、`smoke2` 重叠 273：`edgeBevelCount` **0 差异**，`MainClass` **0 差异**
 - 与 0.3.4 同选择集：剖口 0 差异；`MainClass` 差 138（0.3.4 把 6GL 叠成 Box，本版回到 0.3.3 的 H/Irregular）
+
+## 第四版加速（0.3.6-workplane）— 不采用
+
+试过不再切工作平面、用缓存世界系 solid 顶点算局部包围盒。正确性可通过，但墙钟几乎不变，**不采用**。
+
+- dump：`I:\xingcaisuanfa\cache\20260920_workplane_smoke`
+- 墙钟约 15.7 min（0.3.5 约 16.1 min）；bundle 235.3s（0.3.5 为 257.5s）
+- 与 0.3.5：`edgeBevelCount` / `MainClass` 0 差异，`obbDims` 最大差 1e-6
+- 结论：采样仍占墙钟大头，这刀没有保留价值。
+
+## 2026-09-20 live 钉回 0.3.3
+
+0.3.4 / 0.3.5 / 0.3.6 均不采用。当前编译产物为 `xingcai-runner-body-bracket-0.3.3-index-once`，回滚点 `rollback/exporter-0.3.3-index-once-20260920`。
