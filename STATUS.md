@@ -36,6 +36,8 @@
 
 ## 当前阶段
 
+2026-09-20：导出器 `0.3.3-index-once` 已推 GitHub 并打标签 `rollback/exporter-0.3.3-index-once-20260920`。下一刀 `0.3.4-single-pass` 已实现：识别导出关闭截面采样、选择集单次遍历；工作平面未动。待用户在 Tekla 里选构件实测。记录见 `docs/verification/2026-09-18-exporter-index-once.md`。
+
 2026-06-17：已建立紫金花 Tekla 识别工程骨架，迁入 T3-5GKZ-10 已验证过的核心口径，并完成第一阶段算法抽取。
 
 2026-06-17：已开始搭 Tekla AI Agent 正式架构骨架，新增 `architecture`、`quality`、`pipeline` 层级代码和对应测试。

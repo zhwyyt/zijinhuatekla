@@ -44,3 +44,27 @@ JSON 字段契约仍是 `tekla-body-bracket-export.v2-plate-face`。剖口漏检
 - 总耗时约 5.7 min（剖口索引仍 10.4s 一次，bundle 174.5s）
 - 与 0918 大批量 dump 重叠 248 根 assembly：`edgeBevelCount` **0 条差异**
 - 识别：`outputs/model-first-index-once-smoke2/recognition-all.xlsx`，2335 行，失败 0；方块且倒角/洞口 = 0；剖口=是 350
+
+## 第二版加速（0.3.4-single-pass）
+
+GitHub 回滚点（做这一刀之前的可跑通版本）：
+
+- 导出器 `a40587d`，标签 `rollback/exporter-0.3.3-index-once-20260920`
+- 识别仓库 `72553d9`（0.3.3 实测记录）
+
+本版只改识别导出 live 路径：
+
+1. `SamplingOptions.Enabled=false`，不再按 0.1/0.3/0.5/0.7/0.9 切截面。离线 `--reclassify-cache` 仍默认采样。
+2. 选择集只走一遍：同一根 assembly 上 `ExtractAssembly` + `BuildAssemblyExport`，写出 member JSON 和 bundle。
+3. 没有稳定截面样本时，若 bundle `stationLoops.closedLoopCount>0` 则把 `MainClass` 叠成 Box 并保证 `KeyDimensionsDisplay` 以 `BOX` 开头；否则若有 H `stationFrames` 则叠成 H。不覆盖已有 H/Box/T/Pipe/Angle/Cross。
+4. 工作平面 / `GetLocalBoundingBox` / 共享 `GetSolid` **未改**。COM 仍单线程。
+
+JSON 字段契约仍是 `tekla-body-bracket-export.v2-plate-face`。剖口漏检时先回滚 `rollback/exporter-0.3.3-index-once-20260920`。
+
+回滚导出器：
+
+```powershell
+cd I:\xingcaisuanfa
+git checkout rollback/exporter-0.3.3-index-once-20260920
+dotnet build .\TeklaSectionClassifier.Runner\TeklaSectionClassifier.Runner.csproj -c Debug
+```
