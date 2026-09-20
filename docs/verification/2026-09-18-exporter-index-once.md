@@ -98,3 +98,15 @@ dotnet build .\TeklaSectionClassifier.Runner\TeklaSectionClassifier.Runner.cspro
 5 个主材截面采样保持开启。同一装配、同一世界坐标系下按对象 ID 缓存 `GetSolid`：构件 JSON 抽取（轴/盒/边/厚度）、bundle 全球盒、箱/H 站位切面、螺栓盒、切割体盒共用。`GetLocalBoundingBox` 仍切工作平面后现场 `GetSolid`，不进缓存。
 
 回滚：`rollback/exporter-0.3.3-index-once-20260920`。
+
+## 2026-09-20 选择集实测（0.3.5）
+
+同一批 289 根装配（与 0.3.4 选择集相同）。
+
+- dump：`I:\xingcaisuanfa\cache\20260920_solid_cache_smoke`
+- 版本：`xingcai-runner-body-bracket-0.3.5-solid-cache`
+- 墙钟约 16.1 min；剖口索引 10.2s；bundle 257.5s
+- GetSolid **fetched 13851 / cache hits 95350**（复用约 87%）
+- 271 份 member JSON 全部 **5 个截面样本**
+- 与 0.3.3 `index_once_smoke` 重叠 16、`smoke2` 重叠 273：`edgeBevelCount` **0 差异**，`MainClass` **0 差异**
+- 与 0.3.4 同选择集：剖口 0 差异；`MainClass` 差 138（0.3.4 把 6GL 叠成 Box，本版回到 0.3.3 的 H/Irregular）
