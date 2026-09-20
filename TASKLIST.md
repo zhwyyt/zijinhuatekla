@@ -3,8 +3,8 @@
 - [x] 导出器 0.3.3-index-once：剖口对象全模型只索引一次；GitHub 标签 `rollback/exporter-0.3.3-index-once-20260920`。
 - [x] 导出器 0.3.4-single-pass：识别导出关闭截面采样，选择集 Extract+Bundle 合成一次循环；工作平面仍未改。
 - [x] 用 Tekla 当前选择集实测 0.3.4：289 装配，剖口 0 差异，识别 4044 行失败 0。
-- [x] 收紧 Box/H 叠层：闭合环与 H frame 同时存在时不覆盖（避免 6GL 主材打成 BOX主壁板）。
-- [ ] 重导当前选择集，确认 6GL 恢复 H 上/下翼缘/腹板，5GKZ 主材仍为 BOX主壁板。
+- [x] 0.3.4 关采样导致 6GL 主材错误；live 导出器已 revert 回 `0.3.3-index-once`。
+- [ ] 下一刀加速不得关截面采样：优先缓存 GetSolid、去掉工作平面切换。
 - [x] 确认 Tekla 当前选择集零件图快照导出器设计：命令行独立模式、只处理直接选中的平板 Part、每实体一份 `partDrawingSnapshot.v1`、Python 单独出图。
 - [x] 在隔离 worktree `I:\tmp\xingcaisuanfa-part-snapshot-exporter` 按 TDD 实现 `--export-part-drawing-snapshots`、DTO、平板质量门、最终面环、孔槽与汇总输出。
 - [x] 完成 C# 构建/测试和 Python 跨语言契约回归：C# 26 tests、Python focused 11 tests、完整 165 tests。

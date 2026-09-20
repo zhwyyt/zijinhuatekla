@@ -88,3 +88,7 @@ dotnet build .\TeklaSectionClassifier.Runner\TeklaSectionClassifier.Runner.cspro
 - 其中 `H上翼缘/H腹板/H下翼缘 → BOX主壁板` 各 116 行，均在 `6GL`
 
 已把叠层改成 **只在单一证据时生效**：仅闭合环→Box，仅 H frame→H，双证据不覆盖。当前 Excel 的 `6GL` 主材列不要用。重导后才会带上该修复。
+
+## 2026-09-20 退回 0.3.3
+
+关采样会伤主材，live 导出器已 `git revert` 0.3.4，重新编译为 `xingcai-runner-body-bracket-0.3.3-index-once`。截面采样恢复。标签 `rollback/exporter-0.3.3-index-once-20260920` 仍是可跑通回滚点。
