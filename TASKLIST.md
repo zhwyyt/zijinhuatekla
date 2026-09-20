@@ -4,7 +4,8 @@
 - [x] 导出器 0.3.4-single-pass：识别导出关闭截面采样，选择集 Extract+Bundle 合成一次循环；工作平面仍未改。
 - [x] 用 Tekla 当前选择集实测 0.3.4：289 装配，剖口 0 差异，识别 4044 行失败 0。
 - [x] 0.3.4 关采样导致 6GL 主材错误；live 导出器已 revert 回 `0.3.3-index-once`。
-- [ ] 下一刀加速不得关截面采样：优先缓存 GetSolid、去掉工作平面切换。
+- [x] 0.3.5-solid-cache：世界坐标系 GetSolid 按零件缓存，5 个截面采样保留。
+- [ ] 用 Tekla 选择集实测 0.3.5：对照 0.3.3 的 edgeBevelCount 与主材列。
 - [x] 确认 Tekla 当前选择集零件图快照导出器设计：命令行独立模式、只处理直接选中的平板 Part、每实体一份 `partDrawingSnapshot.v1`、Python 单独出图。
 - [x] 在隔离 worktree `I:\tmp\xingcaisuanfa-part-snapshot-exporter` 按 TDD 实现 `--export-part-drawing-snapshots`、DTO、平板质量门、最终面环、孔槽与汇总输出。
 - [x] 完成 C# 构建/测试和 Python 跨语言契约回归：C# 26 tests、Python focused 11 tests、完整 165 tests。

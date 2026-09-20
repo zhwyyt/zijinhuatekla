@@ -92,3 +92,9 @@ dotnet build .\TeklaSectionClassifier.Runner\TeklaSectionClassifier.Runner.cspro
 ## 2026-09-20 退回 0.3.3
 
 关采样会伤主材，live 导出器已 `git revert` 0.3.4，重新编译为 `xingcai-runner-body-bracket-0.3.3-index-once`。截面采样恢复。标签 `rollback/exporter-0.3.3-index-once-20260920` 仍是可跑通回滚点。
+
+## 第三版加速（0.3.5-solid-cache）
+
+5 个主材截面采样保持开启。同一装配、同一世界坐标系下按对象 ID 缓存 `GetSolid`：构件 JSON 抽取（轴/盒/边/厚度）、bundle 全球盒、箱/H 站位切面、螺栓盒、切割体盒共用。`GetLocalBoundingBox` 仍切工作平面后现场 `GetSolid`，不进缓存。
+
+回滚：`rollback/exporter-0.3.3-index-once-20260920`。
