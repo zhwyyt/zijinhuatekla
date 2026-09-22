@@ -39,6 +39,38 @@ def rectangle_from_obb(
     )
 
 
+def solid_cut_proof(cut: Mapping[str, object] | None) -> bool | None:
+    """Tekla GetCutPart(RAW father, cutter) when dump has cutsFatherSolid; else None."""
+    if not isinstance(cut, Mapping) or "cutsFatherSolid" not in cut:
+        return None
+    return cut.get("cutsFatherSolid") is True
+
+
+def boolean_cut_hits_part(
+    part_box: Mapping[str, object] | None,
+    cut: Mapping[str, object] | None,
+    *,
+    min_overlap: float = 1.0,
+) -> bool | None:
+    """Whether a BOOLEAN_CUT actually modifies the part solid.
+
+    cutsFatherSolid in the dump is authoritative (Tekla GetCutPart on RAW father).
+    Missing field falls back to AABB: False means the cut cannot have modified the
+    solid; overlap is not solid proof.
+    """
+    proven = solid_cut_proof(cut)
+    if proven is not None:
+        return proven
+    nested = cut.get("boundingBox") if isinstance(cut, Mapping) else None
+    cut_box = nested if isinstance(nested, Mapping) else cut
+    part_min, part_max = _bb_minmax(part_box or {})
+    cut_min, cut_max = _bb_minmax(cut_box or {})
+    if part_min is None or cut_min is None:
+        return None
+    overlap = _overlap_sizes(part_min, part_max, cut_min, cut_max)
+    return overlap[0] > min_overlap and overlap[1] > min_overlap and overlap[2] > min_overlap
+
+
 def classify_plate_boolean_cuts(
     *,
     part_box: Mapping[str, object],
@@ -60,6 +92,8 @@ def classify_plate_boolean_cuts(
     foreign = 0
     for cut in cuts:
         if not isinstance(cut, Mapping):
+            continue
+        if solid_cut_proof(cut) is False:
             continue
         op_id = cut.get("operativePartId")
         if op_id is not None and int(op_id) in bevel_ops:
@@ -113,8 +147,8 @@ def _cut_role(
 def _bb_minmax(box: Mapping[str, object]) -> tuple[tuple[float, float, float] | None, tuple[float, float, float] | None]:
     if not isinstance(box, Mapping):
         return None, None
-    minimum = box.get("min") or {}
-    maximum = box.get("max") or {}
+    minimum = box.get("min")
+    maximum = box.get("max")
     if not isinstance(minimum, Mapping) or not isinstance(maximum, Mapping):
         return None, None
     part_min = (float(minimum.get("x") or 0.0), float(minimum.get("y") or 0.0), float(minimum.get("z") or 0.0))

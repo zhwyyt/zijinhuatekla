@@ -1,6 +1,11 @@
 import unittest
 
-from zijinhua_tekla.geom.plate_cuts import classify_plate_boolean_cuts, rectangle_from_obb
+from zijinhua_tekla.geom.plate_cuts import (
+    boolean_cut_hits_part,
+    classify_plate_boolean_cuts,
+    rectangle_from_obb,
+    solid_cut_proof,
+)
 from zijinhua_tekla.geom.shop import classify_shop_process
 
 
@@ -12,6 +17,68 @@ class PlateCutsTests(unittest.TestCase):
         ys = {point[1] for point in ring}
         self.assertEqual({0.0, 680.0}, xs)
         self.assertEqual({0.0, 90.0}, ys)
+
+    def test_separated_boxes_are_not_a_real_cut(self):
+        part_box = {
+            "min": {"x": 1169.9, "y": 9451.2, "z": 30580.0},
+            "max": {"x": 1356.6, "y": 9659.7, "z": 31070.0},
+        }
+        cut_box = {
+            "min": {"x": 519.3, "y": 9449.5, "z": 31258.0},
+            "max": {"x": 1571.3, "y": 9479.5, "z": 31288.0},
+        }
+        self.assertIs(False, boolean_cut_hits_part(part_box, cut_box))
+        self.assertIsNone(boolean_cut_hits_part({}, cut_box))
+
+    def test_get_cut_part_flag_is_authoritative(self):
+        part_box = {
+            "min": {"x": 0.0, "y": 0.0, "z": 0.0},
+            "max": {"x": 100.0, "y": 100.0, "z": 20.0},
+        }
+        overlapping = {
+            "cutsFatherSolid": False,
+            "cutProof": "NO_SHELL",
+            "boundingBox": {
+                "min": {"x": 10.0, "y": 10.0, "z": 0.0},
+                "max": {"x": 40.0, "y": 40.0, "z": 20.0},
+            },
+        }
+        separated = {
+            "cutsFatherSolid": True,
+            "cutProof": "GET_CUT_PART",
+            "boundingBox": {
+                "min": {"x": 0.0, "y": 0.0, "z": 100.0},
+                "max": {"x": 10.0, "y": 10.0, "z": 110.0},
+            },
+        }
+        self.assertIs(False, solid_cut_proof(overlapping))
+        self.assertIs(True, solid_cut_proof(separated))
+        self.assertIsNone(solid_cut_proof({"boundingBox": overlapping["boundingBox"]}))
+        self.assertIs(False, boolean_cut_hits_part(part_box, overlapping))
+        self.assertIs(True, boolean_cut_hits_part(part_box, separated))
+
+    def test_proven_miss_is_not_an_opening(self):
+        roles = classify_plate_boolean_cuts(
+            part_box={
+                "min": {"x": 10633.0, "y": 458.0, "z": 34994.0},
+                "max": {"x": 11157.0, "y": 470.0, "z": 35516.0},
+            },
+            thickness=12.0,
+            cuts=[
+                {
+                    "operativePartId": 2,
+                    "cutsFatherSolid": False,
+                    "cutProof": "AABB_MISS",
+                    "boundingBox": {
+                        "min": {"x": 10733.0, "y": 439.0, "z": 35094.0},
+                        "max": {"x": 11057.0, "y": 489.0, "z": 35416.0},
+                    },
+                }
+            ],
+        )
+        self.assertEqual(0, roles.opening_count)
+        self.assertEqual(0, roles.chamfer_count)
+        self.assertEqual(0, roles.foreign_count)
 
     def test_neighbor_cut_is_foreign(self):
         roles = classify_plate_boolean_cuts(
@@ -44,6 +111,28 @@ class PlateCutsTests(unittest.TestCase):
             cuts=[
                 {
                     "operativePartId": 2,
+                    "boundingBox": {
+                        "min": {"x": 10733.0, "y": 439.0, "z": 35094.0},
+                        "max": {"x": 11057.0, "y": 489.0, "z": 35416.0},
+                    },
+                }
+            ],
+        )
+        self.assertEqual(1, roles.opening_count)
+        self.assertEqual(0, roles.chamfer_count)
+
+    def test_proven_interior_cut_is_opening(self):
+        roles = classify_plate_boolean_cuts(
+            part_box={
+                "min": {"x": 10633.0, "y": 458.0, "z": 34994.0},
+                "max": {"x": 11157.0, "y": 470.0, "z": 35516.0},
+            },
+            thickness=12.0,
+            cuts=[
+                {
+                    "operativePartId": 2,
+                    "cutsFatherSolid": True,
+                    "cutProof": "GET_CUT_PART",
                     "boundingBox": {
                         "min": {"x": 10733.0, "y": 439.0, "z": 35094.0},
                         "max": {"x": 11057.0, "y": 489.0, "z": 35416.0},

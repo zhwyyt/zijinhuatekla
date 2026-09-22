@@ -95,7 +95,209 @@ class NormalizedAdapterTests(unittest.TestCase):
         self.assertEqual(0, part.edge_bevel_count)
         self.assertFalse(part.has_edge_bevel)
 
-    def test_plate_edge_wedge_longer_than_obb_still_counts(self):
+    def test_boolean_cut_proven_not_to_cut_solid_is_not_an_edge_bevel(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 24,
+                "partPosition": "A-PX-4",
+                "profileString": "PL20*490",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 20,
+                "obbDims": {"x": 260.0, "y": 490.0, "z": 20.0},
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "BOOLEAN_CUT",
+                        "chamferX": 20.0,
+                        "chamferY": 20.0,
+                        "dz1": 490.0,
+                        "isBevel": True,
+                        "cutsFatherSolid": False,
+                        "cutProof": "AABB_MISS",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(0, part.edge_bevel_count)
+        self.assertFalse(part.has_edge_bevel)
+
+    def test_boolean_cut_proven_to_cut_solid_keeps_plate_edge_wedge(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 25,
+                "partPosition": "A-PX-5",
+                "profileString": "PL14",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 14,
+                "obbDims": {"x": 840.0, "y": 310.0, "z": 14.0},
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "BOOLEAN_CUT",
+                        "chamferX": 14.0,
+                        "chamferY": 14.0,
+                        "dz1": 1150.0,
+                        "isBevel": True,
+                        "cutsFatherSolid": True,
+                        "cutProof": "GET_CUT_PART",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(1, part.edge_bevel_count)
+        self.assertTrue(part.has_edge_bevel)
+
+    def test_boolean_cut_that_misses_part_box_is_not_an_edge_bevel(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 23,
+                "partPosition": "A-PX-3",
+                "profileString": "PL20*490",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 20,
+                "obbDims": {"x": 260.0, "y": 490.0, "z": 20.0},
+                "boundingBox": {
+                    "min": {"x": 1169.9, "y": 9451.2, "z": 30580.0},
+                    "max": {"x": 1356.6, "y": 9659.7, "z": 31070.0},
+                },
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "BOOLEAN_CUT",
+                        "chamferX": 20.0,
+                        "chamferY": 20.0,
+                        "dz1": 490.0,
+                        "isBevel": True,
+                        "boundingBox": {
+                            "min": {"x": 519.3, "y": 9449.5, "z": 31258.0},
+                            "max": {"x": 1571.3, "y": 9479.5, "z": 31288.0},
+                        },
+                    }
+                ],
+            }
+        )
+        self.assertEqual(0, part.edge_bevel_count)
+        self.assertFalse(part.has_edge_bevel)
+
+    def test_long_bar_boolean_cut_missing_dz_is_not_an_edge_bevel(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 20,
+                "partPosition": "A-PX-2",
+                "profileString": "PL20*490",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 20,
+                "obbDims": {"x": 260.0, "y": 490.0, "z": 20.0},
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "BOOLEAN_CUT",
+                        "chamferX": 1052.0019,
+                        "chamferY": 30.0666,
+                        "dz1": 30.0,
+                        "isBevel": True,
+                        "operativePartId": 99,
+                    }
+                ],
+            }
+        )
+        self.assertEqual(0, part.edge_bevel_count)
+        self.assertFalse(part.has_edge_bevel)
+
+    def test_missed_boolean_cut_is_not_counted(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 27,
+                "partPosition": "A-PX-7",
+                "profileString": "PL20*490",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 20,
+                "obbDims": {"x": 260.0, "y": 490.0, "z": 20.0},
+                "boltHoleCount": 2,
+                "booleanCutCount": 1,
+                "holeLikeFeatureCount": 3,
+                "booleanCutDetails": [
+                    {
+                        "operativePartId": 99,
+                        "cutsFatherSolid": False,
+                        "cutProof": "AABB_MISS",
+                        "boundingBox": {
+                            "min": {"x": 519.3, "y": 9449.5, "z": 31258.0},
+                            "max": {"x": 1571.3, "y": 9479.5, "z": 31288.0},
+                        },
+                    }
+                ],
+            }
+        )
+        self.assertEqual(0, part.boolean_cut_count)
+        self.assertEqual(2, part.hole_like_feature_count)
+
+    def test_proven_edge_wedge_is_an_edge_bevel_without_size_threshold(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 28,
+                "partPosition": "A-PX-8",
+                "profileString": "PL20*490",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 20,
+                "obbDims": {"x": 260.0, "y": 490.0, "z": 20.0},
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "BOOLEAN_CUT",
+                        "chamferX": 30.0,
+                        "chamferY": 30.0,
+                        "dz1": 490.0,
+                        "isBevel": True,
+                        "cutsFatherSolid": True,
+                        "cutProof": "GET_CUT_PART",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(1, part.edge_bevel_count)
+        self.assertTrue(part.has_edge_bevel)
+
+    def test_proven_long_bar_cut_is_an_edge_bevel_without_size_threshold(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 26,
+                "partPosition": "A-PX-6",
+                "profileString": "PL20*490",
+                "runtimeType": "ContourPlate",
+                "isPlateLike": True,
+                "thickness": 20,
+                "obbDims": {"x": 260.0, "y": 490.0, "z": 20.0},
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "BOOLEAN_CUT",
+                        "chamferX": 1052.0019,
+                        "chamferY": 30.0666,
+                        "dz1": 30.0,
+                        "isBevel": True,
+                        "cutsFatherSolid": True,
+                        "cutProof": "GET_CUT_PART",
+                    }
+                ],
+            }
+        )
+        self.assertEqual(1, part.edge_bevel_count)
+        self.assertTrue(part.has_edge_bevel)
+
+    def test_unproven_plate_edge_wedge_is_not_an_edge_bevel(self):
         part = normalized_part_from_bundle_part(
             {
                 "partId": 16,
@@ -118,8 +320,8 @@ class NormalizedAdapterTests(unittest.TestCase):
                 ],
             }
         )
-        self.assertEqual(1, part.edge_bevel_count)
-        self.assertTrue(part.has_edge_bevel)
+        self.assertEqual(0, part.edge_bevel_count)
+        self.assertFalse(part.has_edge_bevel)
 
     def test_exported_end_chamfer_is_kept_for_sections(self):
         part = normalized_part_from_bundle_part(

@@ -21,6 +21,11 @@
 - [x] 输出 T3-5GKZ-10 对齐结果：CSV、JSON、Markdown。
 - [x] 写入验证记录：单元测试结果和样例分析命令。
 - [x] 焊接垫板按 Weld/Contact 与焊缝几何识别，禁止用零件名称；识别工序改为下料/割孔/钻孔/折弯组合，禁止推断「不下」。
+- [x] 用 Tekla 当前选择集（289 装配 / 0.3.3-index-once）跑识别并出 Excel：`outputs/model-first-weld-backing-selection/recognition-all.xlsx`，4044 行失败 0，工序「不下」=0。
+- [x] 主材识别逻辑不动，零件特征另列出表：`outputs/selection-main-plus-features/recognition-main-plus-features.xlsx`。H 构件主材用型钢/`H_OR_BH_SECTION`，剖口/倒角/割孔/焊接垫板另列。
+- [x] 导出器 `0.3.3-solid-cut-proof`：BOOLEAN_CUT 用 RAW 父体 `GetCutPart` 写 `cutsFatherSolid`；Python 消费该字段，缺字段退 AABB。主材/采样未改。
+- [x] 当前选择集重导并出表：当时 Tekla 只选中 `T3-6GKL-4`。`T3-PX-187` 剖口=否（`AABB_MISS`）。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features.xlsx`。
+- [x] 板边剖口只认 `cutsFatherSolid=true`，未证明/未切到的 BOOLEAN_CUT 忽略；`T3-PX-187` 工序不再 UNKNOWN。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features-relaxed.xlsx`。
 - [ ] 下一阶段补充构件类型、零件角色、焊接/螺栓/空间关系和配送顺序。
 - [ ] 建立构件装配顺序数据契约与报告。
 - [ ] 建立焊接顺序数据契约与报告。

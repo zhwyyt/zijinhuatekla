@@ -132,6 +132,22 @@ class ShopGeometryTests(unittest.TestCase):
             hole_like_feature_count=1,
         )
         self.assertEqual("异形", shape)
+        self.assertFalse(any("洞口" in item for item in evidence))
+
+    def test_inner_opening_beyond_bolts_uses_opening_evidence(self):
+        shape, evidence = classify_shop_shape(
+            profile="PL14*243",
+            runtime_type="ContourPlate",
+            is_plate_like=True,
+            thickness=14,
+            obb_dims=(281, 243, 14),
+            contour_vertex_count=4,
+            concave_corner_count=0,
+            contour_points=((0, 0, 0), (281, 0, 0), (281, 243, 0), (0, 243, 0)),
+            bolt_hole_count=1,
+            hole_like_feature_count=2,
+        )
+        self.assertEqual("异形", shape)
         self.assertTrue(any("洞口" in item for item in evidence))
 
     def test_polybeam_without_contour_stays_irregular(self):

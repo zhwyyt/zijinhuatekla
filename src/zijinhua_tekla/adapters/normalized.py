@@ -6,7 +6,7 @@ from collections import Counter
 from typing import Any, Mapping
 
 from ..contracts.normalized import NormalizedMemberDocument, NormalizedPart
-from ..geom.plate_cuts import classify_plate_boolean_cuts
+from ..geom.plate_cuts import boolean_cut_hits_part, classify_plate_boolean_cuts, solid_cut_proof
 from ..rules import as_float, as_int, part_length_approx, part_profile_norm, part_width_approx, text
 
 
@@ -59,7 +59,7 @@ def normalized_part_from_bundle_part(
         concave_corner_count=as_int(part.get("concaveCornerCount")),
         has_arc_contour=bool(part.get("hasArcContour")),
         bolt_hole_count=bolt_hole_count,
-        boolean_cut_count=as_int(part.get("booleanCutCount")),
+        boolean_cut_count=_boolean_cut_count(part),
         weld_count=len(welds) if isinstance(welds, list) else 0,
         hole_like_feature_count=hole_like,
         obb_dims=obb_dims,
@@ -124,11 +124,26 @@ def _edge_bevels(
         for item in items:
             if not isinstance(item, Mapping) or item.get("isBevel") is not True:
                 continue
-            if _bevel_belongs_to_part(item, obb_dims, thickness):
+            if _bevel_belongs_to_part(item):
                 count += 1
         return count, count > 0
     has_bevel = bool(part.get("hasEdgeBevel")) or declared > 0
     return declared, has_bevel
+
+
+def _boolean_cut_count(part: Mapping[str, Any]) -> int:
+    declared = as_int(part.get("booleanCutCount"))
+    cuts = part.get("booleanCutDetails")
+    if not isinstance(cuts, list) or not cuts:
+        return declared
+    hits = 0
+    for cut in cuts:
+        if not isinstance(cut, Mapping):
+            continue
+        if boolean_cut_hits_part(part.get("boundingBox"), cut) is False:
+            continue
+        hits += 1
+    return hits
 
 
 def _plate_cut_counts(
@@ -164,7 +179,7 @@ def _bevel_operative_ids(
     for item in part.get("edgeBevels") or []:
         if not isinstance(item, Mapping) or item.get("isBevel") is not True:
             continue
-        if not _bevel_belongs_to_part(item, obb_dims, thickness):
+        if not _bevel_belongs_to_part(item):
             continue
         op_id = item.get("operativePartId")
         if op_id is not None:
@@ -205,34 +220,23 @@ def _infer_end_chamfer_count(part: Mapping[str, Any]) -> int:
         op_id = cut.get("operativePartId")
         if op_id is not None and as_int(op_id) in bevel_ops:
             continue
+        if solid_cut_proof(cut) is False:
+            continue
         if _is_end_clip(part_box, cut.get("boundingBox") or {}):
             count += 1
     return count
 
 
-def _bevel_belongs_to_part(
-    item: Mapping[str, Any],
-    obb_dims: tuple[float, float, float],
-    thickness: float,
-) -> bool:
+def _bevel_belongs_to_part(item: Mapping[str, Any]) -> bool:
     if str(item.get("kind") or "").upper() != "BOOLEAN_CUT":
         return True
-    sizes = sorted(abs(float(value)) for value in _item_sizes(item))
-    if not sizes or sizes[-1] <= 0:
-        return True
-    part_long = max((abs(float(value)) for value in obb_dims), default=0.0)
-    if part_long <= 0 or sizes[-1] <= part_long * 1.25 + 30.0:
-        return True
-    plate_t = thickness if thickness > 0 else min((value for value in obb_dims if value > 0), default=0.0)
-    if plate_t <= 0:
-        return False
-    return sizes[0] <= plate_t * 2.5 + 8.0 and sizes[1] <= plate_t * 4.0 + 10.0
+    return solid_cut_proof(item) is True
 
 
 def _item_sizes(item: Mapping[str, Any]) -> tuple[float, float, float]:
     x = abs(as_float(item.get("chamferX")))
     y = abs(as_float(item.get("chamferY")))
-    z = abs(as_float(item.get("dz1")))
+    z = abs(as_float(item.get("dz1") or item.get("chamferDZ") or item.get("chamferZ")))
     if x or y or z:
         return (x, y, z)
     return _box_size(item.get("boundingBox") or {})

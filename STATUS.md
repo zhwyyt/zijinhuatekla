@@ -36,6 +36,12 @@
 
 ## 当前阶段
 
+2026-09-22：板边剖口只认 Tekla `GetCutPart` 实体切割证明（`cutsFatherSolid=true` / `cutProof=GET_CUT_PART`），不再使用 `t+8/t+12` 等尺寸阈值；未证明一律不进剖口，螺栓孔不再写成洞口。`T3-PX-187` 剖口=否、洞口=否、工序=下料+钻孔。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features-relaxed.xlsx`。验证见 `docs/verification/2026-09-21-solid-cut-proof.md`。
+
+2026-09-21：按「主材识别逻辑不动、零件特征另列」重出 Excel：`outputs/selection-main-plus-features/recognition-main-plus-features.xlsx`。H 走型钢/`H_OR_BH_SECTION`，不把 BOX/十字写进 H 主材列；剖口/倒角/割孔/焊接垫板另列。T3-6GKL-4 主材为 `T3-H-471` 型钢。验证见 `docs/verification/2026-09-21-main-plus-features-excel.md`。
+
+2026-09-21：用 Tekla 当前选择集（导出器 `0.3.3-index-once`，289 装配）跑完识别。Excel：`outputs/model-first-weld-backing-selection/recognition-all.xlsx`，4044 行失败 0，工序「不下」=0。Excel 焊接垫板 38 行；分类器实际命中 141 个 (装配,零件号)，其中 103 条被主壁板/组合截面主板评分盖掉。验证见 `docs/verification/2026-09-21-selected-members-weld-backing-recognition.md`。
+
 2026-09-20：焊接垫板改为关系+焊缝几何识别，不再读零件名称；识别 Excel 工序改为工序1（下料/下料割孔）+工序2（下料折弯/下料钻孔），只有零件信息写明「不下」才输出「不下」。验证见 `docs/verification/2026-09-20-weld-backing-and-shop-process.md`。
 
 2026-09-20：live 导出器钉回 `0.3.3-index-once`。0.3.4 伤主材已撤回；0.3.5/0.3.6 正确但加速不明显，不采用。回滚点 `rollback/exporter-0.3.3-index-once-20260920`。

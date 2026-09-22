@@ -204,8 +204,10 @@ def classify_shop_shape(
     if has_end_chamfer and outline == "RECTANGLE":
         outline = "IRREGULAR"
         evidence = evidence + ["平面倒角"]
-    if bolt_hole_count > 0 or has_inner_opening(hole_like_feature_count, bolt_hole_count):
+    if has_inner_opening(hole_like_feature_count, bolt_hole_count):
         evidence = evidence + ["洞口"]
+        outline = "IRREGULAR"
+    elif bolt_hole_count > 0:
         outline = "IRREGULAR"
     if has_edge_bevel:
         evidence = evidence + ["板边剖口"]
