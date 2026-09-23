@@ -39,6 +39,13 @@ def _add_model_args(parser: argparse.ArgumentParser) -> None:
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+
+    if args.command == "gui":
+        from .gui.report_gui import main as run_gui
+
+        run_gui()
+        return
+
     root = Path(args.root)
     out_dir = Path(args.out)
     assembly_id = args.assembly_id or None
@@ -49,12 +56,6 @@ def main(argv=None):
         paths = write_recognition_workbook(result, out_dir, args.member_id)
         print(f"Wrote {paths.xlsx_path}")
         print(f"Wrote {paths.json_path}")
-        return
-
-    if args.command == "gui":
-        from .gui.report_gui import main as run_gui
-
-        run_gui()
         return
 
     truth_root = Path(args.truth_root) if getattr(args, "truth_root", "") else None
