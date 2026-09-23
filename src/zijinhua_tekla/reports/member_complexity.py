@@ -107,7 +107,7 @@ def classify_member_complexity(
 
     if corbel_units is None:
         clusters = classify_appendage_clusters_from_bundle(assembly, member)
-        units = classify_corbel_units(assembly, clusters)
+        units = classify_corbel_units(assembly, clusters, member=dict(member))
     else:
         units = list(corbel_units)
 

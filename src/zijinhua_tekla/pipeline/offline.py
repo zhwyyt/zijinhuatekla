@@ -98,7 +98,7 @@ def run_model_recognition(
         spatial_classifications,
         classify_weld_backing_plates(assembly),
     )
-    corbel_units = classify_corbel_units(assembly, spatial_classifications)
+    corbel_units = classify_corbel_units(assembly, spatial_classifications, member=member)
     recognition_rows = _recognition_rows(member_id, document.parts, hints_by_id, len(corbel_units))
     drawing_steps: list[BoxAssemblyDrawingStep] = []
     if include_drawings:

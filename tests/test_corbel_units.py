@@ -70,6 +70,71 @@ class CorbelUnitTests(unittest.TestCase):
 
         self.assertEqual([], classify_corbel_units(assembly, clusters))
 
+    def test_direct_rolled_spine_in_unknown_cluster_is_corbel(self):
+        member = {
+            "Classification": {
+                "PartRoles": [
+                    {"PartId": "10", "Role": "web_candidate"},
+                    {"PartId": "11", "Role": "flange_candidate"},
+                    {"PartId": "12", "Role": "flange_candidate"},
+                ]
+            }
+        }
+        assembly = {
+            "assemblyId": "100",
+            "mainPartId": "10",
+            "parts": [
+                {"partId": "10", "profileString": "PL16*1000", "boundingBox": {"min": {"x": 0, "y": 0, "z": 0}, "max": {"x": 100, "y": 100, "z": 1000}}},
+                {"partId": "11", "profileString": "PL20*400", "boundingBox": {"min": {"x": 0, "y": 50, "z": 0}, "max": {"x": 100, "y": 90, "z": 1000}}},
+                {"partId": "12", "profileString": "PL20*400", "boundingBox": {"min": {"x": 0, "y": -40, "z": 0}, "max": {"x": 100, "y": 0, "z": 1000}}},
+                {"partId": "20", "profileString": "BH400*200*7*10", "centroid": {"x": 50, "y": -300, "z": 800}},
+                {"partId": "21", "profileString": "PL16*230", "centroid": {"x": 50, "y": -300, "z": 300}},
+            ],
+            "relationships": [
+                {"partIdA": "20", "partIdB": "11", "edgeType": "Contact"},
+                {"partIdA": "21", "partIdB": "12", "edgeType": "Contact"},
+            ],
+        }
+        clusters = [
+            AppendageRoleClassification(
+                cluster_id="100:0",
+                role="Unknown",
+                confidence=0.4,
+                part_ids=["20", "21"],
+            )
+        ]
+
+        units = classify_corbel_units(assembly, clusters, member=member)
+
+        self.assertEqual(1, len(units))
+        self.assertEqual(["20"], units[0].part_ids)
+        self.assertIn("DIRECT_ROLLED_SPINE", units[0].evidence_codes)
+
+    def test_direct_spine_is_not_duplicated_in_existing_bracket_cluster(self):
+        member = {"Classification": {"PartRoles": []}}
+        assembly = {
+            "assemblyId": "100",
+            "mainPartId": "10",
+            "parts": [
+                {"partId": "10", "profileString": "PL16*1000"},
+                {"partId": "20", "profileString": "BH400*200*7*10"},
+            ],
+            "relationships": [{"partIdA": "20", "partIdB": "10", "edgeType": "Weld"}],
+        }
+        clusters = [
+            AppendageRoleClassification(
+                cluster_id="100:0",
+                role="Bracket",
+                confidence=0.9,
+                part_ids=["20"],
+            )
+        ]
+
+        units = classify_corbel_units(assembly, clusters, member=member)
+
+        self.assertEqual(1, len(units))
+        self.assertEqual(0, sum(1 for unit in units if "DIRECT_ROLLED_SPINE" in unit.evidence_codes))
+
 
 if __name__ == "__main__":
     unittest.main()
