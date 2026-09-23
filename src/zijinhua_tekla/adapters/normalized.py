@@ -228,9 +228,23 @@ def _infer_end_chamfer_count(part: Mapping[str, Any]) -> int:
 
 
 def _bevel_belongs_to_part(item: Mapping[str, Any]) -> bool:
+    if not _has_bevel_geometry(item):
+        return False
     if str(item.get("kind") or "").upper() != "BOOLEAN_CUT":
         return True
     return solid_cut_proof(item) is True
+
+
+def _has_bevel_geometry(item: Mapping[str, Any]) -> bool:
+    dimensions = (
+        "chamferX",
+        "chamferY",
+        "dz1",
+        "dz2",
+        "firstBevelDimension",
+        "secondBevelDimension",
+    )
+    return any(abs(as_float(item.get(key))) > 1e-9 for key in dimensions)
 
 
 def _item_sizes(item: Mapping[str, Any]) -> tuple[float, float, float]:

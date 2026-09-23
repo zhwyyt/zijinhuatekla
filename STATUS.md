@@ -36,7 +36,7 @@
 
 ## 当前阶段
 
-2026-09-23：牛腿判定增加“直接型钢脊柱”补判，并修正构件复杂度独立重算入口：统一使用 BOX 主壁板分组和 `OUTSIDE_ATTACHMENT` 外伸集合。新增主材轴线形状和折点数，依据 `AxisSegments` 相邻方向夹角判定；当前导出无原生圆弧/曲率证据，不输出“弯曲”。`T3-5GKZ-5` 恢复 4 个牛腿，289 装配复杂度输出 0 错误，轴线为直线 219、折线 70。Excel：`outputs/member-complexity-20260922/member-complexity-geometry-v8.xlsx`。验证见 `docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
+2026-09-23：牛腿判定增加“直接型钢脊柱”补判，并修正构件复杂度独立重算入口：统一使用 BOX 主壁板分组和 `OUTSIDE_ATTACHMENT` 外伸集合。新增主材轴线形状和折点数；剖口必须保留尺寸证据，零尺寸 `CUT_PLANE/FITTING` 只按切割处理。`T3-H-528` 修正为剖口=否、切割=是。289 装配输出 0 错误，零件特征剖口 332，轴线为直线 219、折线 70。Excel：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometry-v7.xlsx`、`outputs/member-complexity-20260922/member-complexity-geometry-v9.xlsx`。验证见 `docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
 
 2026-09-23：构件级主材类型改为一次收集几何签名后生成唯一结果；BOX/H/十字/一字板互斥判定，冲突输出 UNKNOWN，编号 `HXZ` 不参与判定。最新选择集 289 装配 0 错误、0 UNKNOWN，16 根 GKZ 全部 BOX。零件特征 Excel 增加“切割”“螺栓孔”列。设计与验证见 `docs/design/2026-09-23-member-complexity-and-geometry-features.md`、`docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
 

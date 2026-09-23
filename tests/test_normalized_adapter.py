@@ -123,6 +123,34 @@ class NormalizedAdapterTests(unittest.TestCase):
         self.assertEqual(0, part.edge_bevel_count)
         self.assertFalse(part.has_edge_bevel)
 
+    def test_zero_dimension_cut_plane_is_not_an_edge_bevel(self):
+        part = normalized_part_from_bundle_part(
+            {
+                "partId": 70851331,
+                "partPosition": "T3-H-528",
+                "profileString": "BH300*150*6*8",
+                "runtimeType": "Beam",
+                "isPlateLike": False,
+                "hasEdgeBevel": True,
+                "edgeBevelCount": 1,
+                "edgeBevels": [
+                    {
+                        "kind": "CUT_PLANE",
+                        "chamferX": 0,
+                        "chamferY": 0,
+                        "dz1": 0,
+                        "dz2": 0,
+                        "firstBevelDimension": 0,
+                        "secondBevelDimension": 0,
+                        "isBevel": True,
+                    }
+                ],
+            }
+        )
+
+        self.assertEqual(0, part.edge_bevel_count)
+        self.assertFalse(part.has_edge_bevel)
+
     def test_boolean_cut_proven_to_cut_solid_keeps_plate_edge_wedge(self):
         part = normalized_part_from_bundle_part(
             {
