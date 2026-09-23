@@ -35,6 +35,8 @@
 # STATUS
 
 ## 当前阶段
+2026-09-23：GUI 升级为双模式。模式1调用本机 Tekla Runner `--output`，从打开的模型导出当前选择集；模式2选择已导出 bundle/根目录，输出 `零件特征`、`构件复杂度` 两个 sheet。导出程序路径默认 `I:\xingcaisuanfa\TeklaSectionClassifier.Runner\bin\Debug\net48\TeklaSectionClassifier.Runner.exe`。单元测试 `241 tests OK`，GUI 构造通过；真实 Tekla 在线导出留待现场人工触发验证。设计/验证见 `docs/design/2026-09-23-gui-combined-excel.md`、`docs/verification/2026-09-23-gui-combined-excel.md`。
+
 2026-09-23：新增 Tekla 导出识别 GUI，可选择导出根目录/bundle，输入项目名称与工程区域，输出单 Excel（零件特征、构件复杂度 两个 sheet）。启动：python -m zijinhua_tekla.gui.report_gui 或 python -m zijinhua_tekla.cli gui。真实 289 装配 smoke 通过，输出 4044/289 行、0 错误。
 
 2026-09-23：牛腿判定增加“直接型钢脊柱”补判，并修正构件复杂度独立重算入口：统一使用 BOX 主壁板分组和 `OUTSIDE_ATTACHMENT` 外伸集合。新增主材轴线形状和折点数；剖口必须保留尺寸证据，零尺寸 `CUT_PLANE/FITTING` 只按切割处理。构件号包含 `MJ` 直接判埋件，不进主材几何判定，但零件特征照常。`T3-H-528` 修正为剖口=否、切割=是。289 装配输出 0 错误，零件特征剖口 332，轴线为直线 219、折线 70。Excel：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometry-v7.xlsx`、`outputs/member-complexity-20260922/member-complexity-geometry-v9.xlsx`。验证见 `docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。

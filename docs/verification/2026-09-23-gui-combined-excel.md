@@ -6,7 +6,7 @@
 $env:PYTHONPATH='src'; python -m unittest discover -s tests
 ```
 
-结果：`237 tests OK`。
+结果：`241 tests OK`。
 
 ## 真实数据 smoke
 
@@ -17,4 +17,5 @@ $env:PYTHONPATH='src'; python -m unittest discover -s tests
 
 ## 未验证
 
+- 模式1未真实触发 Tekla 导出；已确认默认导出程序存在，并用 mock 进程验证参数和导出结果校验。
 - 未做人工作业级图面复核；GUI 交互按钮仅通过类构造、CLI help 和共享导出函数验证。
