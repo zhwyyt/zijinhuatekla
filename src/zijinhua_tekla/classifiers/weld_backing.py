@@ -51,7 +51,7 @@ def _backing_evidence(
         return ()
     weld_hosts = [host_id for host_id in weld_ids if _is_host(parts.get(host_id), _strip_width(part))]
     contact_hosts = [host_id for host_id in contact_ids if _is_host(parts.get(host_id), _strip_width(part))]
-    if not weld_hosts and len(contact_hosts) < 2 and not any(_has_edge_bevel(parts.get(host_id)) for host_id in contact_hosts):
+    if not weld_hosts:
         return ()
     evidence = ["窄长垫板几何"]
     if weld_hosts:

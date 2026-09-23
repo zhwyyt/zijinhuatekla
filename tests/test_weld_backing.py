@@ -75,7 +75,7 @@ class WeldBackingTests(unittest.TestCase):
         )
         self.assertEqual("焊接垫板", result.role)
 
-    def test_strip_contacting_two_wall_plates_without_weld_is_backing(self):
+    def test_strip_contacting_two_wall_plates_without_weld_is_not_backing(self):
         hits = classify_weld_backing_plates(
             {
                 "parts": [
@@ -89,10 +89,9 @@ class WeldBackingTests(unittest.TestCase):
                 ],
             }
         )
-        self.assertIn("strip", hits)
-        self.assertTrue(any("接缝" in item for item in hits["strip"]))
+        self.assertNotIn("strip", hits)
 
-    def test_strip_contacting_bevelled_host_is_backing(self):
+    def test_strip_contacting_bevelled_host_without_weld_is_not_backing(self):
         hits = classify_weld_backing_plates(
             {
                 "parts": [
@@ -104,8 +103,7 @@ class WeldBackingTests(unittest.TestCase):
                 ],
             }
         )
-        self.assertIn("strip", hits)
-        self.assertTrue(any("剖口" in item for item in hits["strip"]))
+        self.assertNotIn("strip", hits)
 
     def test_name_alone_is_not_backing(self):
         hits = classify_weld_backing_plates(

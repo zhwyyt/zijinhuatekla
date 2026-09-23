@@ -35,6 +35,8 @@
 # STATUS
 
 ## 当前阶段
+2026-09-23：焊接垫板判定收紧：窄长板必须有 Tekla 焊缝关系才可命中，`Contact`/剖口只作辅助证据，不再因“接触两块板”触发。真实 289 构件包中焊接垫板由 141 行降至 97 行，`T3-P-2047` 误报清零；`245 tests OK`。验证见 `docs/verification/2026-09-23-weld-backing-weld-required.md`。
+
 2026-09-23：GUI 升级为双模式。模式1调用本机 Tekla Runner `--output`，从打开的模型导出当前选择集；模式2选择已导出 bundle/根目录，输出 `零件特征`、`构件复杂度` 两个 sheet。导出程序路径默认 `I:\xingcaisuanfa\TeklaSectionClassifier.Runner\bin\Debug\net48\TeklaSectionClassifier.Runner.exe`。单元测试 `241 tests OK`，GUI 构造通过；真实 Tekla 在线导出留待现场人工触发验证。设计/验证见 `docs/design/2026-09-23-gui-combined-excel.md`、`docs/verification/2026-09-23-gui-combined-excel.md`。
 
 2026-09-23：新增 Tekla 导出识别 GUI，可选择导出根目录/bundle，输入项目名称与工程区域，输出单 Excel（零件特征、构件复杂度 两个 sheet）。启动：python -m zijinhua_tekla.gui.report_gui 或 python -m zijinhua_tekla.cli gui。真实 289 装配 smoke 通过，输出 4044/289 行、0 错误。
