@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from datetime import datetime
 import queue
 import threading
 import traceback
@@ -11,6 +12,9 @@ from tkinter import filedialog, messagebox, ttk
 
 from ..reports.combined import BUNDLE_FILENAME, export_combined_excel, inspect_export_root
 from ..tekla_export import DEFAULT_RUNNER_PATH, run_tekla_selection_export
+
+
+ERROR_LOG_PATH = Path("outputs/gui-errors.log")
 
 
 class ReportGUI(tk.Tk):
@@ -337,6 +341,20 @@ class ReportGUI(tk.Tk):
                 }
             )
 
+    def _log_error(self, message: dict[str, object]) -> None:
+        try:
+            ERROR_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            title = "Tekla export" if message.get("source") == "tekla" else "Excel generation"
+            with ERROR_LOG_PATH.open("a", encoding="utf-8") as log_file:
+                log_file.write(
+                    f"\n[{timestamp}] {title}\n"
+                    f"{message.get('message')}\n"
+                    f"{message.get('trace')}\n"
+                )
+        except Exception:
+            pass
+
     def _poll_messages(self) -> None:
         try:
             message = self._messages.get_nowait()
@@ -370,6 +388,19 @@ class ReportGUI(tk.Tk):
                 messagebox.showwarning(
                     "部分构件失败",
                     f"Excel 已生成，但有 {result.error_count} 个构件失败。",
+                    parent=self,
+                )
+        else:
+            is_export_error = message.get("source") == "tekla"
+            title = "Tekla 导出失败" if is_export_error else "Excel 生成失败"
+            prefix = "导出失败" if is_export_error else "生成失败"
+            self._log_error(message)
+            self.run_status.set(
+                f"{prefix}：{message.get('message')}\n详细日志：{ERROR_LOG_PATH}"
+            )
+            messagebox.showerror(
+                title,
+                str(message.get("message")),
                 parent=self,
             )
 
@@ -380,12 +411,6 @@ class ReportGUI(tk.Tk):
         else:
             self.tekla_export_button.config(state="normal")
             self.generate_button.config(state="normal")
-            self.run_status.set(f"生成失败：{message.get('message')}")
-            messagebox.showerror(
-                "生成失败",
-                str(message.get("message")),
-                parent=self,
-            )
         self.after(100, self._poll_messages)
 
 
