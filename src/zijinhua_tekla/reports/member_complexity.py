@@ -39,6 +39,8 @@ MEMBER_COMPLEXITY_COLUMNS = [
     "装配ID",
     "主材类型",
     "主材形态",
+    "主材轴线形状",
+    "折弯数量",
     "牛腿数量",
     "牛腿楼层分布",
     "牛腿方向",
@@ -57,6 +59,8 @@ class MemberComplexity:
     assembly_id: str
     main_material_type: str
     main_material_form: str
+    axis_shape: str
+    axis_bend_count: int | None
     corbel_count: int
     corbel_floor_distribution: str
     corbel_orientation: str
@@ -69,6 +73,8 @@ class MemberComplexity:
             "assembly_id": self.assembly_id,
             "main_material_type": self.main_material_type,
             "main_material_form": self.main_material_form,
+            "axis_shape": self.axis_shape,
+            "axis_bend_count": self.axis_bend_count,
             "corbel_count": self.corbel_count,
             "corbel_floor_distribution": self.corbel_floor_distribution,
             "corbel_orientation": self.corbel_orientation,
@@ -82,6 +88,8 @@ class MemberComplexity:
             "装配ID": self.assembly_id,
             "主材类型": self.main_material_type,
             "主材形态": self.main_material_form,
+            "主材轴线形状": self.axis_shape,
+            "折弯数量": self.axis_bend_count if self.axis_bend_count is not None else "",
             "牛腿数量": self.corbel_count,
             "牛腿楼层分布": self.corbel_floor_distribution,
             "牛腿方向": self.corbel_orientation,
@@ -110,6 +118,7 @@ def classify_member_complexity(
     labels = {text(item).lower() for item in classification.get("Labels") or []}
     main_material_type, type_evidence = _main_material_type(assembly, main_part, member)
     main_material_form, form_evidence = _main_material_form(member, main_part, labels)
+    axis_shape, axis_bend_count, axis_evidence = _axis_shape_and_bend_count(member)
 
     if corbel_units is None:
         main_material_groups = classify_main_material_segment_groups(assembly, member)
@@ -126,12 +135,14 @@ def classify_member_complexity(
 
     floor_distribution, floor_evidence = _corbel_floor_distribution(assembly, units)
     orientation, orientation_evidence = _corbel_orientation(member, assembly, units)
-    evidence = type_evidence + form_evidence + floor_evidence + orientation_evidence
+    evidence = type_evidence + form_evidence + axis_evidence + floor_evidence + orientation_evidence
     return MemberComplexity(
         member_id=member_id,
         assembly_id=assembly_id,
         main_material_type=main_material_type,
         main_material_form=main_material_form,
+        axis_shape=axis_shape,
+        axis_bend_count=axis_bend_count,
         corbel_count=len(units),
         corbel_floor_distribution=floor_distribution,
         corbel_orientation=orientation,
@@ -307,6 +318,41 @@ def _varies(values: Sequence[float]) -> bool:
         return False
     span = max(positive) - min(positive)
     return span > max(5.0, 0.02 * max(positive))
+
+
+def _axis_shape_and_bend_count(
+    member: Mapping[str, Any],
+) -> tuple[str, int | None, tuple[str, ...]]:
+    segments = [
+        segment
+        for segment in member.get("AxisSegments") or []
+        if as_float(segment.get("Length")) > 0
+    ]
+    directions = []
+    for segment in segments:
+        direction = segment.get("Direction") or {}
+        vector = (
+            as_float(direction.get("X")),
+            as_float(direction.get("Y")),
+            as_float(direction.get("Z")),
+        )
+        if math.sqrt(sum(value * value for value in vector)) <= 0:
+            return "未知", None, ("axis.invalid_direction",)
+        directions.append(vector)
+
+    if not directions:
+        return "未知", None, ("axis.no_segments",)
+
+    bend_count = sum(
+        1
+        for index in range(len(directions) - 1)
+        if _angle_degrees(directions[index], directions[index + 1]) > 5.0
+    )
+    evidence = (
+        f"axis.segments:{len(directions)}",
+        f"axis.bend_count:{bend_count}",
+    )
+    return ("直线" if bend_count == 0 else "折线"), bend_count, evidence
 
 
 def _corbel_floor_distribution(

@@ -211,6 +211,55 @@ class MemberComplexityTests(unittest.TestCase):
         self.assertEqual("一字板", result.main_material_type)
         self.assertEqual("变截面", result.main_material_form)
 
+    def test_axis_shape_is_straight_without_direction_changes(self):
+        assembly = {
+            "assemblyId": "A2",
+            "metadata": {"assemblyPosition": "T3-AXIS-1"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL16*968"}],
+        }
+        member = {
+            "AxisSegments": [
+                {"Length": 1000, "Direction": {"X": 1, "Y": 0, "Z": 0}},
+                {"Length": 1000, "Direction": {"X": 1, "Y": 0.0001, "Z": 0}},
+            ]
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("直线", result.axis_shape)
+        self.assertEqual(0, result.axis_bend_count)
+        self.assertIn("axis.bend_count:0", result.evidence_codes)
+
+    def test_axis_shape_counts_geometry_bends(self):
+        assembly = {
+            "assemblyId": "A2",
+            "metadata": {"assemblyPosition": "T3-AXIS-2"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL16*968"}],
+        }
+        member = {
+            "AxisSegments": [
+                {"Length": 1000, "Direction": {"X": 1, "Y": 0, "Z": 0}},
+                {"Length": 1000, "Direction": {"X": 0, "Y": 1, "Z": 0}},
+                {"Length": 1000, "Direction": {"X": 0, "Y": 0, "Z": 1}},
+            ]
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("折线", result.axis_shape)
+        self.assertEqual(2, result.axis_bend_count)
+        self.assertIn("axis.bend_count:2", result.evidence_codes)
+
+    def test_axis_shape_is_unknown_without_axis_evidence(self):
+        assembly = {
+            "assemblyId": "A2",
+            "metadata": {"assemblyPosition": "T3-AXIS-3"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL16*968"}],
+        }
+        result = classify_member_complexity(assembly, {}, corbel_units=[])
+        self.assertEqual("未知", result.axis_shape)
+        self.assertIsNone(result.axis_bend_count)
+        self.assertIn("axis.no_segments", result.evidence_codes)
+
     def test_corbel_level_and_orientation(self):
         assembly = {
             "assemblyId": "A3",

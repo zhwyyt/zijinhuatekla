@@ -9,7 +9,7 @@
 ## 输出
 
 - 零件特征（最终版）：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometry-v5.xlsx`
-- 构件复杂度（最终版）：`outputs/member-complexity-20260922/member-complexity-geometry-v7.xlsx`
+- 构件复杂度（最终版）：`outputs/member-complexity-20260922/member-complexity-geometry-v8.xlsx`
 
 ## 命令
 
@@ -21,12 +21,14 @@ python outputs/member-complexity-20260922/run_batch.py
 
 ## 结果
 
-- 单元测试：`229 tests OK`。
+- 单元测试：`232 tests OK`。
 - 零件特征：4044 行，失败 0。
 - 构件复杂度：289 行，失败 0。
 - 零件特征汇总：剖口 467、倒角 1085、割孔 353、切割 1025、洞口 308、螺栓孔 1258、焊接垫板 141。
 - 构件复杂度主材分布：H钢 211、BOX 16、一字板 12、角钢 50；UNKNOWN 0。
 - 构件形态分布：变截面 121、同截面 132、折弯 8、多个折弯 28。
+- 构件轴线（v8）：直线 219、折线 70；折点数为 0:219、1:16、2:33、3:11、4:1、5:2、6:5、7:1、8:1。
+- 轴线判定依据 `AxisSegments` 相邻方向夹角，5° 以内视为同向；证据输出 `axis.segments:N` 和 `axis.bend_count:N`。当前 dump 无原生圆弧/曲率字段，不能可靠判定连续弯曲。
 - 牛腿（v7）：合计 122；无 245、同一楼层高度 29、多楼层高度 15；方向为垂直 29、斜 4、混合 11。
 - 牛腿补判：直接型钢脊柱需同时满足型钢截面、不在主体集合、与主体直接 `Weld/Contact`、质心在主体外包盒外；梁上重心仍在主体包盒内的 `BH` 不误判。
 - 牛腿入口修正：构件复杂度独立重算时改用与离线管线一致的 `BOX_MAIN_WALL_CONFIRMED_SET` 和 `OUTSIDE_ATTACHMENT` 输入；`T3-5GKZ-5` 恢复为 4 个牛腿（2 个 `T3-H-558` 型钢脊柱 + 2 个 `T3-P-4959` 板组），楼层分布为多楼层高度、方向为垂直。`T3-5GKZ-7` 当前数据为 2 个 `T3-H-558` 型钢脊柱牛腿。
@@ -37,6 +39,7 @@ python outputs/member-complexity-20260922/run_batch.py
 - 期望口径：大簇分类不覆盖直接连接主体的外伸型钢脊柱；对已在 Bracket 簇中的脊柱去重。
 - 回归测试：`tests/test_corbel_units.py` 覆盖 Unknown 大簇中的直接脊柱、已有 Bracket 簇不重复计数。
 - 追加回归：复杂度入口必须把 `BOX_MAIN_WALL_CONFIRMED_SET` 作为主体集合、`OUTSIDE_ATTACHMENT` 作为外伸附件集合，防止板组牛腿在单独汇总时被漏判。
+- 追加回归：单方向/同向轴线为直线；两个几何方向变化计 2；无轴线段为未知且折点数为空。
 
 ## 回归修正
 
