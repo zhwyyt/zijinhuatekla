@@ -141,7 +141,12 @@ def _main_material_type(
     member: Mapping[str, Any],
 ) -> tuple[str, tuple[str, ...]]:
     profile = norm_spec(text(main_part.get("profileString") or main_part.get("profile")))
-    section_type, section_evidence = _section_topology_type(member, assembly)
+    section_type, section_evidence = _section_topology_type(
+        member,
+        assembly,
+        profile,
+        main_part.get("isPlateLike") is True,
+    )
     if section_type is not None:
         return section_type, section_evidence
     return _direct_profile_type(profile, main_part.get("isPlateLike") is True)
@@ -164,6 +169,8 @@ _SECTION_SIGNATURE_LABELS = {
 def _section_topology_type(
     member: Mapping[str, Any],
     assembly: Mapping[str, Any],
+    profile: str,
+    is_plate_like: bool,
 ) -> tuple[str | None, tuple[str, ...]]:
     samples = [sample for sample in member.get("Samples") or [] if isinstance(sample, Mapping)]
     signature_counts = {signature: 0 for signature in _SECTION_SIGNATURE_LABELS}
@@ -171,6 +178,8 @@ def _section_topology_type(
     for sample in samples:
         signature, is_direct_profile = _section_sample_signature(sample)
         direct_profile_count += int(is_direct_profile)
+        if signature == "plate" and not (profile.startswith(("PL", "FLAT")) or is_plate_like):
+            signature = None
         if signature is not None:
             signature_counts[signature] += 1
 
@@ -190,7 +199,7 @@ def _section_topology_type(
         return _SECTION_SIGNATURE_LABELS[matched[0]], evidence
     if direct_profile_count:
         return None, (f"section.direct_profile_body:{direct_profile_count}/{len(samples)}",)
-    station_loop_count = _closed_station_loop_count(assembly)
+    station_loop_count = _closed_station_loop_count(assembly) if not samples else 0
     if station_loop_count:
         return "BOX", (f"section.closed_station_loop:{station_loop_count}",)
     return None, ()

@@ -8,8 +8,8 @@
 
 ## 输出
 
-- 零件特征（最终版）：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometry-v3.xlsx`
-- 构件复杂度（最终版）：`outputs/member-complexity-20260922/member-complexity-geometry-v3.xlsx`
+- 零件特征（最终版）：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometry-v5.xlsx`
+- 构件复杂度（最终版）：`outputs/member-complexity-20260922/member-complexity-geometry-v5.xlsx`
 
 ## 命令
 
@@ -25,11 +25,12 @@ python outputs/member-complexity-20260922/run_batch.py
 - 零件特征：4044 行，失败 0。
 - 构件复杂度：289 行，失败 0。
 - 零件特征汇总：剖口 467、倒角 1085、割孔 353、切割 1025、洞口 308、螺栓孔 1258、焊接垫板 141。
-- 构件复杂度主材分布：H钢 203、BOX 33、一字板 3、角钢 50；UNKNOWN 0。
+- 构件复杂度主材分布：H钢 211、BOX 16、一字板 12、角钢 50；UNKNOWN 0。
 - 构件形态分布：变截面 121、同截面 132、折弯 8、多个折弯 28。
 - 牛腿：合计 124；无 228、同一楼层高度 47、多楼层高度 14；方向为垂直 41、斜 15、混合 5。
 - `HXZ` 抽样：13 个构件实例中 8 个主件为单板输出一字板，5 个主件为 `BH/H` 输出 H钢；零件表只把一字板的 `mainPartId` 标为主材，不再把附属板标记为 `BOX主壁板`。
 - `GKZ` 修正：16 个构件实例全部输出 BOX，证据为 `section.box_signature:4/5`；无 UNKNOWN。旧逻辑曾因 H 板组签名或判定顺序抢判。
+- 一字板证据收口：单板截面签名必须同时满足主件 `PL/FLAT/plateLike`；`BH/H` 主件在局部样本只切出单板时不改为一字板，避免证据缺失覆盖直接截面几何。
 
 ## 回归修正
 
