@@ -36,6 +36,8 @@
 
 ## 当前阶段
 
+2026-09-23：新增构件级复杂度报告，覆盖主材类型、主材形态、牛腿数量/楼层分布/方向；最新选择集 289 装配 0 错误。零件特征 Excel 增加“切割”“螺栓孔”列，`HXZ` 构件族按项目语义输出一字板。设计与验证见 `docs/design/2026-09-23-member-complexity-and-geometry-features.md`、`docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
+
 2026-09-22：板边剖口只认 Tekla `GetCutPart` 实体切割证明（`cutsFatherSolid=true` / `cutProof=GET_CUT_PART`），不再使用 `t+8/t+12` 等尺寸阈值；未证明一律不进剖口，螺栓孔不再写成洞口。`T3-PX-187` 剖口=否、洞口=否、工序=下料+钻孔。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features-relaxed.xlsx`。验证见 `docs/verification/2026-09-21-solid-cut-proof.md`。
 
 2026-09-21：按「主材识别逻辑不动、零件特征另列」重出 Excel：`outputs/selection-main-plus-features/recognition-main-plus-features.xlsx`。H 走型钢/`H_OR_BH_SECTION`，不把 BOX/十字写进 H 主材列；剖口/倒角/割孔/焊接垫板另列。T3-6GKL-4 主材为 `T3-H-471` 型钢。验证见 `docs/verification/2026-09-21-main-plus-features-excel.md`。

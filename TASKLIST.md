@@ -26,6 +26,8 @@
 - [x] 导出器 `0.3.3-solid-cut-proof`：BOOLEAN_CUT 用 RAW 父体 `GetCutPart` 写 `cutsFatherSolid`；Python 消费该字段，缺字段退 AABB。主材/采样未改。
 - [x] 当前选择集重导并出表：当时 Tekla 只选中 `T3-6GKL-4`。`T3-PX-187` 剖口=否（`AABB_MISS`）。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features.xlsx`。
 - [x] 板边剖口只认 `cutsFatherSolid=true`，未证明/未切到的 BOOLEAN_CUT 忽略；`T3-PX-187` 工序不再 UNKNOWN。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features-relaxed.xlsx`。
+- [x] 建立构件级复杂度报告：主材类型、主材形态、牛腿数量/楼层分布/方向；最新选择集 289 装配 0 错误。
+- [x] 零件特征 Excel 增加“切割”“螺栓孔”列；`HXZ` 构件族按项目语义输出一字板。
 - [ ] 下一阶段补充构件类型、零件角色、焊接/螺栓/空间关系和配送顺序。
 - [ ] 建立构件装配顺序数据契约与报告。
 - [ ] 建立焊接顺序数据契约与报告。

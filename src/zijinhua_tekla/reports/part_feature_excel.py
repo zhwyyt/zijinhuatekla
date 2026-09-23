@@ -38,6 +38,8 @@ FEATURE_COLUMNS = [
     "倒角",
     "割孔",
     "洞口",
+    "切割",
+    "螺栓孔",
     "焊接垫板",
     "证据",
 ]
@@ -52,6 +54,16 @@ def algorithm_body_type(member: Mapping[str, Any] | None) -> str:
         return "H"
     if main_class in {"2", "BOX"}:
         return "BOX"
+    if main_class == "3":
+        return "T"
+    if main_class == "4":
+        return "十字"
+    if main_class == "5":
+        return "角钢"
+    if main_class == "6":
+        return "圆管"
+    if main_class == "7":
+        return "异形"
     key_dimensions = text(classification.get("KeyDimensionsDisplay")).upper()
     if key_dimensions.startswith(("BH", "H")) and not key_dimensions.startswith("HP"):
         return "H"
@@ -68,7 +80,13 @@ def build_part_feature_rows(
     assembly_id = text(assembly.get("assemblyId"))
     member_id = member_id or text((assembly.get("metadata") or {}).get("assemblyPosition"))
     body_type = algorithm_body_type(member)
+    if "HXZ" in member_id.upper():
+        body_type = "一字板"
     main_by_id, inside_ids = _main_material_marks(assembly, member, body_type)
+    if body_type == "一字板":
+        main_id = text(assembly.get("mainPartId"))
+        if main_id:
+            main_by_id[main_id] = "一字板"
     backing = classify_weld_backing_plates(assembly)
 
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -154,6 +172,8 @@ def build_part_feature_rows(
                 "倒角": _flag(feature_text, "倒角"),
                 "割孔": "是" if "下料割孔" in process else "否",
                 "洞口": _flag(feature_text, "洞口"),
+                "切割": "是" if any(item["part"].boolean_cut_count > 0 for item in items) else "否",
+                "螺栓孔": "是" if any(item["part"].bolt_hole_count > 0 for item in items) else "否",
                 "焊接垫板": "是" if any(item["backing"] for item in items) else "否",
                 "证据": evidence_text,
             }
