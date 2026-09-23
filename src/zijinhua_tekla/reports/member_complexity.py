@@ -102,7 +102,7 @@ def classify_member_complexity(
     main_part = _main_part(assembly)
     classification = member.get("Classification") or {}
     labels = {text(item).lower() for item in classification.get("Labels") or []}
-    main_material_type, type_evidence = _main_material_type(main_part, member, classification)
+    main_material_type, type_evidence = _main_material_type(assembly, main_part, member)
     main_material_form, form_evidence = _main_material_form(member, main_part, labels)
 
     if corbel_units is None:
@@ -136,68 +136,118 @@ def _main_part(assembly: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _main_material_type(
+    assembly: Mapping[str, Any],
     main_part: Mapping[str, Any],
     member: Mapping[str, Any],
-    classification: Mapping[str, Any],
 ) -> tuple[str, tuple[str, ...]]:
     profile = norm_spec(text(main_part.get("profileString") or main_part.get("profile")))
-    main_class = text(classification.get("MainClass")).upper()
-    composite_type, composite_evidence = _section_composite_type(member, main_class)
-    if profile.startswith("L"):
-        return "角钢", ("profile.L",)
-    if profile.startswith(_CHANNEL_PREFIXES):
-        return "槽钢", ("profile.CHANNEL",)
-    if composite_type and profile.startswith(("PL", "FLAT")):
-        return composite_type, composite_evidence
-    if main_class in {"2", "BOX"} or profile.startswith(("BOX", "BBOX")):
-        return "BOX", ("main_class.BOX",)
-    if main_class in {"4", "CROSS"}:
-        return "十字", ("main_class.CROSS",)
-    if main_class in {"5", "ANGLE"}:
-        return "角钢", ("main_class.ANGLE",)
-    if main_class in {"6", "PIPE"} or profile.startswith(("PIPE", "CHS")):
-        return "圆管", ("main_class.PIPE",)
-    if composite_type:
-        return composite_type, composite_evidence
-    if profile.startswith(("PL", "FLAT")) or main_part.get("isPlateLike") is True:
-        return "一字板", ("profile.PL", "main_part.plate_like")
-    if main_class in {"1", "H", "BH", "H_BEAM"} or profile.startswith(("BH", "H")):
-        return "H钢", ("main_class.H",)
-    return "UNKNOWN", ("main_class.unknown",)
+    section_type, section_evidence = _section_topology_type(member, assembly)
+    if section_type is not None:
+        return section_type, section_evidence
+    return _direct_profile_type(profile, main_part.get("isPlateLike") is True)
 
 
 def main_material_geometry_type(assembly: Mapping[str, Any], member: Mapping[str, Any]) -> str:
     main_part = _main_part(assembly)
-    classification = member.get("Classification") or {}
-    material_type, _ = _main_material_type(main_part, member, classification)
+    material_type, _ = _main_material_type(assembly, main_part, member)
     return material_type
 
 
-def _section_composite_type(
+_SECTION_SIGNATURE_LABELS = {
+    "box": "BOX",
+    "h": "H钢",
+    "cross": "十字",
+    "plate": "一字板",
+}
+
+
+def _section_topology_type(
     member: Mapping[str, Any],
-    main_class: str,
+    assembly: Mapping[str, Any],
 ) -> tuple[str | None, tuple[str, ...]]:
-    features = [
-        sample.get("SectionFeatures") or {}
-        for sample in member.get("Samples") or []
-        if isinstance(sample, Mapping)
-    ]
-    if any(
-        as_float(feature.get("ClosedLoops")) > 0 or as_float(feature.get("CavityCount")) > 0
-        for feature in features
-    ):
-        return "BOX", ("section.closed_loop",)
-    has_h_signature = any(
-        as_float(feature.get("MajorPlateCount")) >= 3
-        and as_float(feature.get("CentralVerticalPlateCount")) >= 1
-        and as_float(feature.get("CentralHorizontalPlateCount")) >= 2
-        for feature in features
+    samples = [sample for sample in member.get("Samples") or [] if isinstance(sample, Mapping)]
+    signature_counts = {signature: 0 for signature in _SECTION_SIGNATURE_LABELS}
+    direct_profile_count = 0
+    for sample in samples:
+        signature, is_direct_profile = _section_sample_signature(sample)
+        direct_profile_count += int(is_direct_profile)
+        if signature is not None:
+            signature_counts[signature] += 1
+
+    matched = tuple(
+        signature
+        for signature, count in signature_counts.items()
+        if count > 0
     )
-    if has_h_signature:
-        return "H钢", ("section.major_plates>=3", "section.web_and_two_flanges")
-    if main_class in {"4", "CROSS"}:
-        return "十字", ("main_class.CROSS",)
+    evidence = tuple(
+        f"section.{signature}_signature:{signature_counts[signature]}/{len(samples)}"
+        for signature in _SECTION_SIGNATURE_LABELS
+        if signature_counts[signature] > 0
+    )
+    if len(matched) > 1:
+        return "UNKNOWN", ("section.conflict",) + evidence
+    if len(matched) == 1:
+        return _SECTION_SIGNATURE_LABELS[matched[0]], evidence
+    if direct_profile_count:
+        return None, (f"section.direct_profile_body:{direct_profile_count}/{len(samples)}",)
+    station_loop_count = _closed_station_loop_count(assembly)
+    if station_loop_count:
+        return "BOX", (f"section.closed_station_loop:{station_loop_count}",)
     return None, ()
+
+
+def _closed_station_loop_count(assembly: Mapping[str, Any]) -> int:
+    evidence = (assembly.get("metadata") or {}).get("boxSectionEvidence") or {}
+    loops = evidence.get("stationLoops") if isinstance(evidence, Mapping) else None
+    if not isinstance(loops, list):
+        return 0
+    return sum(
+        as_float(loop.get("closedLoopCount")) > 0 or as_float(loop.get("cavityCount")) > 0
+        for loop in loops
+        if isinstance(loop, Mapping)
+    )
+
+
+def _section_sample_signature(sample: Mapping[str, Any]) -> tuple[str | None, bool]:
+    feature = sample.get("SectionFeatures") or {}
+    roles = {
+        text(part.get("RoleHint")).lower()
+        for part in sample.get("SectionParts") or []
+        if isinstance(part, Mapping)
+    }
+    closed = as_float(feature.get("ClosedLoops")) > 0
+    cavity = as_float(feature.get("CavityCount")) > 0
+    major = as_float(feature.get("MajorPlateCount"))
+    vertical = as_float(feature.get("CentralVerticalPlateCount"))
+    horizontal = as_float(feature.get("CentralHorizontalPlateCount"))
+
+    if closed and cavity:
+        return "box", False
+    if major == 3 and vertical == 1 and horizontal == 2 and not closed:
+        return "h", False
+    if major == vertical + horizontal and vertical == 2 and horizontal >= 3 and not closed:
+        return "cross", False
+    if major == 1 and not closed and "direct_profile_body" not in roles:
+        return "plate", False
+    if major == 1 and roles == {"direct_profile_body"}:
+        return None, True
+    return None, False
+
+
+def _direct_profile_type(profile: str, is_plate_like: bool) -> tuple[str, tuple[str, ...]]:
+    if profile.startswith("L"):
+        return "角钢", ("profile.L",)
+    if profile.startswith(_CHANNEL_PREFIXES):
+        return "槽钢", ("profile.CHANNEL",)
+    if profile.startswith(("BOX", "BBOX")):
+        return "BOX", ("profile.BOX",)
+    if profile.startswith(("PIPE", "CHS")):
+        return "圆管", ("profile.PIPE",)
+    if profile.startswith(("PL", "FLAT")) or is_plate_like:
+        return "一字板", ("profile.PL", "main_part.plate_like")
+    if profile.startswith(("BH", "H")) and not profile.startswith("HP"):
+        return "H钢", ("profile.H",)
+    return "UNKNOWN", ("profile.unknown",)
 
 
 def _main_material_form(

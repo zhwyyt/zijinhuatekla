@@ -15,7 +15,7 @@ class MemberComplexityTests(unittest.TestCase):
         member = {"AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}]}
         result = classify_member_complexity(assembly, member, corbel_units=[])
         self.assertEqual("H钢", result.main_material_type)
-        self.assertIn("main_class.H", result.evidence_codes)
+        self.assertIn("profile.H", result.evidence_codes)
 
     def test_plate_without_composite_signature_is_one_plate(self):
         assembly = {
@@ -30,7 +30,7 @@ class MemberComplexityTests(unittest.TestCase):
         }
         result = classify_member_complexity(assembly, member, corbel_units=[])
         self.assertEqual("一字板", result.main_material_type)
-        self.assertIn("main_part.plate_like", result.evidence_codes)
+        self.assertIn("section.plate_signature:1/1", result.evidence_codes)
 
     def test_plate_composing_h_section_is_h(self):
         assembly = {
@@ -53,7 +53,7 @@ class MemberComplexityTests(unittest.TestCase):
         }
         result = classify_member_complexity(assembly, member, corbel_units=[])
         self.assertEqual("H钢", result.main_material_type)
-        self.assertIn("section.web_and_two_flanges", result.evidence_codes)
+        self.assertIn("section.h_signature:1/1", result.evidence_codes)
 
     def test_box_with_h_like_counts_and_closed_loop_is_box(self):
         assembly = {
@@ -78,7 +78,120 @@ class MemberComplexityTests(unittest.TestCase):
         }
         result = classify_member_complexity(assembly, member, corbel_units=[])
         self.assertEqual("BOX", result.main_material_type)
-        self.assertIn("section.closed_loop", result.evidence_codes)
+        self.assertIn("section.box_signature:1/1", result.evidence_codes)
+
+    def test_cross_signature_is_cross(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-4MQMJ-13"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL20*300", "isPlateLike": True}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 5,
+                        "CentralVerticalPlateCount": 2,
+                        "CentralHorizontalPlateCount": 3,
+                        "ClosedLoops": 0,
+                        "CavityCount": 0,
+                    }
+                }
+            ],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("十字", result.main_material_type)
+        self.assertIn("section.cross_signature:1/1", result.evidence_codes)
+
+    def test_attached_plates_do_not_make_box_cross_conflict(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-5GKZ-4"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL16*968", "isPlateLike": True}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 20,
+                        "CentralVerticalPlateCount": 6,
+                        "CentralHorizontalPlateCount": 14,
+                        "ClosedLoops": 0,
+                        "CavityCount": 0,
+                    }
+                },
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 12,
+                        "CentralVerticalPlateCount": 6,
+                        "CentralHorizontalPlateCount": 6,
+                        "ClosedLoops": 1,
+                        "CavityCount": 1,
+                    }
+                },
+            ],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("BOX", result.main_material_type)
+        self.assertIn("section.box_signature:1/2", result.evidence_codes)
+
+    def test_conflicting_section_signatures_are_unknown(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-CONFLICT-1"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL20*600", "isPlateLike": True}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 3,
+                        "CentralVerticalPlateCount": 1,
+                        "CentralHorizontalPlateCount": 2,
+                        "ClosedLoops": 0,
+                        "CavityCount": 0,
+                    }
+                },
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 4,
+                        "CentralVerticalPlateCount": 2,
+                        "CentralHorizontalPlateCount": 2,
+                        "ClosedLoops": 1,
+                        "CavityCount": 1,
+                    }
+                },
+            ],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("UNKNOWN", result.main_material_type)
+        self.assertIn("section.conflict", result.evidence_codes)
+
+    def test_direct_profile_body_is_not_plate_signature(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-4HXZ-10"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "BH950*250*40*60"}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [
+                {
+                    "SectionFeatures": {"MajorPlateCount": 1},
+                    "SectionParts": [{"PartId": 10, "RoleHint": "direct_profile_body"}],
+                }
+            ],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("H钢", result.main_material_type)
+        self.assertIn("profile.H", result.evidence_codes)
 
     def test_section_variation_is_tapered(self):
         assembly = {

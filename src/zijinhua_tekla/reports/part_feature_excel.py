@@ -80,12 +80,13 @@ def build_part_feature_rows(
 ) -> list[dict[str, Any]]:
     assembly_id = text(assembly.get("assemblyId"))
     member_id = member_id or text((assembly.get("metadata") or {}).get("assemblyPosition"))
-    body_type = algorithm_body_type(member)
     geometry_type = main_material_geometry_type(assembly, member or {})
-    if geometry_type == "一字板":
-        body_type = "一字板"
-    elif geometry_type in {"H钢", "BOX", "十字", "角钢", "槽钢", "圆管"}:
+    if geometry_type == "H钢":
         body_type = "H" if geometry_type == "H钢" else geometry_type
+    elif geometry_type in {"BOX", "十字", "一字板", "角钢", "槽钢", "圆管"}:
+        body_type = geometry_type
+    else:
+        body_type = "UNKNOWN"
     main_by_id, inside_ids = _main_material_marks(assembly, member, body_type)
     if body_type == "一字板":
         main_id = text(assembly.get("mainPartId"))
