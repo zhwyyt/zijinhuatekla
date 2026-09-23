@@ -26,6 +26,7 @@ def build_parser():
     _add_model_args(analyze_parser)
     analyze_parser.add_argument("--truth-root", default="")
     analyze_parser.add_argument("--draw", action="store_true", help="Also write BOX drawing steps DXF.")
+    sub.add_parser("gui", help="Open the combined Tekla export Excel GUI.")
     return parser
 
 
@@ -48,6 +49,12 @@ def main(argv=None):
         paths = write_recognition_workbook(result, out_dir, args.member_id)
         print(f"Wrote {paths.xlsx_path}")
         print(f"Wrote {paths.json_path}")
+        return
+
+    if args.command == "gui":
+        from .gui.report_gui import main as run_gui
+
+        run_gui()
         return
 
     truth_root = Path(args.truth_root) if getattr(args, "truth_root", "") else None

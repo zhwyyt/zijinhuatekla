@@ -35,6 +35,7 @@
 # STATUS
 
 ## 当前阶段
+2026-09-23：新增 Tekla 导出识别 GUI，可选择导出根目录/bundle，输入项目名称与工程区域，输出单 Excel（零件特征、构件复杂度 两个 sheet）。启动：python -m zijinhua_tekla.gui.report_gui 或 python -m zijinhua_tekla.cli gui。真实 289 装配 smoke 通过，输出 4044/289 行、0 错误。
 
 2026-09-23：牛腿判定增加“直接型钢脊柱”补判，并修正构件复杂度独立重算入口：统一使用 BOX 主壁板分组和 `OUTSIDE_ATTACHMENT` 外伸集合。新增主材轴线形状和折点数；剖口必须保留尺寸证据，零尺寸 `CUT_PLANE/FITTING` 只按切割处理。构件号包含 `MJ` 直接判埋件，不进主材几何判定，但零件特征照常。`T3-H-528` 修正为剖口=否、切割=是。289 装配输出 0 错误，零件特征剖口 332，轴线为直线 219、折线 70。Excel：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometry-v7.xlsx`、`outputs/member-complexity-20260922/member-complexity-geometry-v9.xlsx`。验证见 `docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
 
@@ -295,3 +296,4 @@
 - BOX 内外关系层 T3 smoke：`python -m zijinhua_tekla.cli analyze --root I:\xingcaisuanfa\cache\20260623_144836 --truth-root I:\xingcaisuanfa\cache\20260615_161938 --member-id T3-5GKZ-10 --out outputs\box-part-spatial-relations-smoke-20260623-v3`；新增 `box-part-spatial-relations.json/csv`，分布 `INSIDE_BODY=228`、`MAIN_WALL=16`、`OUTSIDE_ATTACHMENT=15`、`INSUFFICIENT_EVIDENCE=0`。
 - T3 空间诊断：附属件簇 `15`，`Bracket=2`，`Unknown=13`。
 2026-07-09：工序图标注/避让层第一版已落地。新增纯 Python `AnnotationLayout` 核心与 DXF adapter；Tekla U-stage POC 改为 `DrawingAnnotationLayout` DTO 后再用普通 `Line/Text` 渲染，避免 GA sheet 上原生 `StraightDimensionSet` 造成黑三角/粉色问号/乱码。目标 `10-3GZ-6 / modelId=28717373` 已生成 clean 图 `PROCESS-FIXTURE-U-10-3GZ-6-S1-CLEAN`，mark `[24]`；JSON 证据 `outputs/tekla-process-drawings-10-3GZ-6/tekla-ga-fixture-u-stage-28717373-step1.json` 显示 `annotation_layout_status=OK`、`annotation_collision_count=0`、`dimension_inserted=False`、`primitive_dimension_lines_inserted=True`、`layout lines=12/texts=9`、重开读回 `Lines=24/Texts=9/Dimensions=0/StraightDimensions=0/StraightDimensionSets=0/Parts=0/Marks=0/Views=0`。验证记录见 `docs/verification/2026-07-07-tekla-openapi-existing-drawing-inspection.md`。
+
