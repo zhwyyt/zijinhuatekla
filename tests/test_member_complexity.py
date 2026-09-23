@@ -1,7 +1,11 @@
 import unittest
 
 from zijinhua_tekla.classifiers.corbel_units import CorbelUnit
-from zijinhua_tekla.reports.member_complexity import classify_member_complexity
+from zijinhua_tekla.reports.member_complexity import (
+    classify_member_complexity,
+    is_embedded_member_id,
+    main_material_geometry_type,
+)
 
 
 class MemberComplexityTests(unittest.TestCase):
@@ -83,7 +87,7 @@ class MemberComplexityTests(unittest.TestCase):
     def test_cross_signature_is_cross(self):
         assembly = {
             "assemblyId": "A1",
-            "metadata": {"assemblyPosition": "T3-4MQMJ-13"},
+            "metadata": {"assemblyPosition": "T3-4MQ-13"},
             "mainPartId": 10,
             "parts": [{"partId": 10, "profileString": "PL20*300", "isPlateLike": True}],
         }
@@ -259,6 +263,34 @@ class MemberComplexityTests(unittest.TestCase):
         self.assertEqual("未知", result.axis_shape)
         self.assertIsNone(result.axis_bend_count)
         self.assertIn("axis.no_segments", result.evidence_codes)
+
+    def test_member_id_with_mj_is_embedded_before_main_material(self):
+        assembly = {
+            "assemblyId": "A3",
+            "metadata": {"assemblyPosition": "T3-MJ-1"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "BH300*150*6*8"}],
+        }
+        member = {
+            "Samples": [
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 3,
+                        "CentralVerticalPlateCount": 1,
+                        "CentralHorizontalPlateCount": 2,
+                    }
+                }
+            ],
+            "AxisSegments": [{"Length": 1000, "Direction": {"X": 1, "Y": 0, "Z": 0}}],
+        }
+
+        self.assertTrue(is_embedded_member_id("T3-MJ-1"))
+        self.assertEqual("埋件", main_material_geometry_type(assembly, member, "T3-MJ-1"))
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("埋件", result.main_material_type)
+        self.assertEqual("不适用", result.main_material_form)
+        self.assertIn("member.id_mj", result.evidence_codes)
+        self.assertEqual("直线", result.axis_shape)
 
     def test_corbel_level_and_orientation(self):
         assembly = {

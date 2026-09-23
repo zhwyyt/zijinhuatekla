@@ -18,7 +18,7 @@ from ..classifiers.composite_main_material_segments import (
 from ..classifiers.weld_backing import classify_weld_backing_plates
 from ..geom.shop import classify_shop_process, classify_shop_shape, is_rolled_profile
 from ..part_roles import MAIN_MATERIAL_LABELS
-from .member_complexity import main_material_geometry_type
+from .member_complexity import is_embedded_member_id, main_material_geometry_type
 from ..rules import text
 
 FEATURE_COLUMNS = [
@@ -80,18 +80,22 @@ def build_part_feature_rows(
 ) -> list[dict[str, Any]]:
     assembly_id = text(assembly.get("assemblyId"))
     member_id = member_id or text((assembly.get("metadata") or {}).get("assemblyPosition"))
-    geometry_type = main_material_geometry_type(assembly, member or {})
-    if geometry_type == "H钢":
-        body_type = "H" if geometry_type == "H钢" else geometry_type
-    elif geometry_type in {"BOX", "十字", "一字板", "角钢", "槽钢", "圆管"}:
-        body_type = geometry_type
+    if is_embedded_member_id(member_id):
+        body_type = "埋件"
+        main_by_id, inside_ids = {}, set()
     else:
-        body_type = "UNKNOWN"
-    main_by_id, inside_ids = _main_material_marks(assembly, member, body_type)
-    if body_type == "一字板":
-        main_id = text(assembly.get("mainPartId"))
-        if main_id:
-            main_by_id[main_id] = "一字板"
+        geometry_type = main_material_geometry_type(assembly, member or {}, member_id)
+        if geometry_type == "H钢":
+            body_type = "H" if geometry_type == "H钢" else geometry_type
+        elif geometry_type in {"BOX", "十字", "一字板", "角钢", "槽钢", "圆管"}:
+            body_type = geometry_type
+        else:
+            body_type = "UNKNOWN"
+        main_by_id, inside_ids = _main_material_marks(assembly, member, body_type)
+        if body_type == "一字板":
+            main_id = text(assembly.get("mainPartId"))
+            if main_id:
+                main_by_id[main_id] = "一字板"
     backing = classify_weld_backing_plates(assembly)
 
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)

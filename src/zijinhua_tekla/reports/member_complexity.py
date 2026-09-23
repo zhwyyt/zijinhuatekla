@@ -116,8 +116,14 @@ def classify_member_complexity(
     main_part = _main_part(assembly)
     classification = member.get("Classification") or {}
     labels = {text(item).lower() for item in classification.get("Labels") or []}
-    main_material_type, type_evidence = _main_material_type(assembly, main_part, member)
-    main_material_form, form_evidence = _main_material_form(member, main_part, labels)
+    if is_embedded_member_id(member_id):
+        main_material_type = "埋件"
+        type_evidence = ("member.id_mj",)
+        main_material_form = "不适用"
+        form_evidence = ("member.id_mj",)
+    else:
+        main_material_type, type_evidence = _main_material_type(assembly, main_part, member)
+        main_material_form, form_evidence = _main_material_form(member, main_part, labels)
     axis_shape, axis_bend_count, axis_evidence = _axis_shape_and_bend_count(member)
 
     if corbel_units is None:
@@ -176,7 +182,21 @@ def _main_material_type(
     return _direct_profile_type(profile, main_part.get("isPlateLike") is True)
 
 
-def main_material_geometry_type(assembly: Mapping[str, Any], member: Mapping[str, Any]) -> str:
+def is_embedded_member_id(member_id: str) -> bool:
+    return "MJ" in member_id.upper()
+
+
+def main_material_geometry_type(
+    assembly: Mapping[str, Any],
+    member: Mapping[str, Any],
+    member_id: str = "",
+) -> str:
+    resolved_member_id = member_id or text(
+        (assembly.get("metadata") or {}).get("assemblyPosition")
+        or (member.get("Member") or {}).get("Position")
+    )
+    if is_embedded_member_id(resolved_member_id):
+        return "埋件"
     main_part = _main_part(assembly)
     material_type, _ = _main_material_type(assembly, main_part, member)
     return material_type

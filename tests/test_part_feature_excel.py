@@ -5,6 +5,7 @@ from zijinhua_tekla.reports.part_feature_excel import (
     algorithm_body_type,
     build_part_feature_rows,
 )
+from zijinhua_tekla.reports.member_complexity import is_embedded_member_id
 
 
 class PartFeatureExcelTests(unittest.TestCase):
@@ -56,6 +57,43 @@ class PartFeatureExcelTests(unittest.TestCase):
         self.assertEqual("BOX主壁板", wall["主材说明"])
         self.assertEqual("否", pad["主材"])
         self.assertEqual("是", pad["焊接垫板"])
+
+    def test_mj_member_has_no_main_material_but_keeps_part_features(self):
+        assembly = {
+            "assemblyId": "A-MJ",
+            "mainPartId": "10",
+            "metadata": {"assemblyPosition": "T3-MJ-1"},
+            "parts": [
+                {
+                    "partId": "10",
+                    "partPosition": "T3-H-999",
+                    "profileString": "BH300*150*6*8",
+                    "runtimeType": "Beam",
+                    "isPlateLike": False,
+                    "boltHoleCount": 1,
+                    "booleanCutCount": 1,
+                    "booleanCutDetails": [
+                        {
+                            "operativePartId": 20,
+                            "cutsFatherSolid": True,
+                            "cutProof": "GET_CUT_PART",
+                        }
+                    ],
+                }
+            ],
+            "relationships": [],
+        }
+        member = {"Classification": {"MainClass": 1}}
+
+        self.assertTrue(is_embedded_member_id("T3-MJ-1"))
+        rows = {row["零件名称"]: row for row in build_part_feature_rows(assembly, member, "T3-MJ-1")}
+        beam = rows["T3-H-999"]
+
+        self.assertEqual("埋件", beam["构件类型"])
+        self.assertEqual("否", beam["主材"])
+        self.assertEqual("", beam["主材说明"])
+        self.assertEqual("是", beam["切割"])
+        self.assertEqual("是", beam["螺栓孔"])
 
 
 def _same_mark_plate_assembly() -> dict:
