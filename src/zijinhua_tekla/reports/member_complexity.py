@@ -102,7 +102,7 @@ def classify_member_complexity(
     main_part = _main_part(assembly)
     classification = member.get("Classification") or {}
     labels = {text(item).lower() for item in classification.get("Labels") or []}
-    main_material_type, type_evidence = _main_material_type(member_id, main_part, classification)
+    main_material_type, type_evidence = _main_material_type(main_part, member, classification)
     main_material_form, form_evidence = _main_material_form(member, main_part, labels)
 
     if corbel_units is None:
@@ -136,19 +136,19 @@ def _main_part(assembly: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _main_material_type(
-    member_id: str,
     main_part: Mapping[str, Any],
+    member: Mapping[str, Any],
     classification: Mapping[str, Any],
 ) -> tuple[str, tuple[str, ...]]:
     profile = norm_spec(text(main_part.get("profileString") or main_part.get("profile")))
     main_class = text(classification.get("MainClass")).upper()
-    member_token = member_id.upper()
-    if "HXZ" in member_token:
-        return "一字板", ("member_id.HXZ_FAMILY",)
+    composite_type, composite_evidence = _section_composite_type(member, main_class)
     if profile.startswith("L"):
         return "角钢", ("profile.L",)
     if profile.startswith(_CHANNEL_PREFIXES):
         return "槽钢", ("profile.CHANNEL",)
+    if composite_type and profile.startswith(("PL", "FLAT")):
+        return composite_type, composite_evidence
     if main_class in {"2", "BOX"} or profile.startswith(("BOX", "BBOX")):
         return "BOX", ("main_class.BOX",)
     if main_class in {"4", "CROSS"}:
@@ -157,11 +157,47 @@ def _main_material_type(
         return "角钢", ("main_class.ANGLE",)
     if main_class in {"6", "PIPE"} or profile.startswith(("PIPE", "CHS")):
         return "圆管", ("main_class.PIPE",)
+    if composite_type:
+        return composite_type, composite_evidence
     if profile.startswith(("PL", "FLAT")) or main_part.get("isPlateLike") is True:
         return "一字板", ("profile.PL", "main_part.plate_like")
     if main_class in {"1", "H", "BH", "H_BEAM"} or profile.startswith(("BH", "H")):
         return "H钢", ("main_class.H",)
     return "UNKNOWN", ("main_class.unknown",)
+
+
+def main_material_geometry_type(assembly: Mapping[str, Any], member: Mapping[str, Any]) -> str:
+    main_part = _main_part(assembly)
+    classification = member.get("Classification") or {}
+    material_type, _ = _main_material_type(main_part, member, classification)
+    return material_type
+
+
+def _section_composite_type(
+    member: Mapping[str, Any],
+    main_class: str,
+) -> tuple[str | None, tuple[str, ...]]:
+    features = [
+        sample.get("SectionFeatures") or {}
+        for sample in member.get("Samples") or []
+        if isinstance(sample, Mapping)
+    ]
+    has_h_signature = any(
+        as_float(feature.get("MajorPlateCount")) >= 3
+        and as_float(feature.get("CentralVerticalPlateCount")) >= 1
+        and as_float(feature.get("CentralHorizontalPlateCount")) >= 2
+        for feature in features
+    )
+    if has_h_signature:
+        return "H钢", ("section.major_plates>=3", "section.web_and_two_flanges")
+    if any(
+        as_float(feature.get("ClosedLoops")) > 0 or as_float(feature.get("CavityCount")) > 0
+        for feature in features
+    ):
+        return "BOX", ("section.closed_loop",)
+    if main_class in {"4", "CROSS"}:
+        return "十字", ("main_class.CROSS",)
+    return None, ()
 
 
 def _main_material_form(

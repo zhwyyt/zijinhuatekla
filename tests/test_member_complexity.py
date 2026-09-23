@@ -5,7 +5,7 @@ from zijinhua_tekla.reports.member_complexity import classify_member_complexity
 
 
 class MemberComplexityTests(unittest.TestCase):
-    def test_hxz_family_is_one_plate(self):
+    def test_hxz_direct_h_profile_is_not_overridden_to_one_plate(self):
         assembly = {
             "assemblyId": "A1",
             "metadata": {"assemblyPosition": "T3-4HXZ-1"},
@@ -14,8 +14,46 @@ class MemberComplexityTests(unittest.TestCase):
         }
         member = {"AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}]}
         result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("H钢", result.main_material_type)
+        self.assertIn("main_class.H", result.evidence_codes)
+
+    def test_plate_without_composite_signature_is_one_plate(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-4HXZ-2"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL40*600", "isPlateLike": True}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [{"SectionFeatures": {"MajorPlateCount": 1}}],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
         self.assertEqual("一字板", result.main_material_type)
-        self.assertIn("member_id.HXZ_FAMILY", result.evidence_codes)
+        self.assertIn("main_part.plate_like", result.evidence_codes)
+
+    def test_plate_composing_h_section_is_h(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-6GL-144"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL12*200", "isPlateLike": True}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 3,
+                        "CentralVerticalPlateCount": 1,
+                        "CentralHorizontalPlateCount": 2,
+                    }
+                }
+            ],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("H钢", result.main_material_type)
+        self.assertIn("section.web_and_two_flanges", result.evidence_codes)
 
     def test_section_variation_is_tapered(self):
         assembly = {

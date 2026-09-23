@@ -36,7 +36,7 @@
 
 ## 当前阶段
 
-2026-09-23：新增构件级复杂度报告，覆盖主材类型、主材形态、牛腿数量/楼层分布/方向；最新选择集 289 装配 0 错误。零件特征 Excel 增加“切割”“螺栓孔”列，`HXZ` 构件族按项目语义输出一字板。设计与验证见 `docs/design/2026-09-23-member-complexity-and-geometry-features.md`、`docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
+2026-09-23：新增构件级复杂度报告，覆盖主材类型、主材形态、牛腿数量/楼层分布/方向；最新选择集 289 装配 0 错误。零件特征 Excel 增加“切割”“螺栓孔”列；一字板只用几何/截面证据判定，先排除 H/BOX/十字组合，编号中的 `HXZ` 不参与判定。设计与验证见 `docs/design/2026-09-23-member-complexity-and-geometry-features.md`、`docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
 
 2026-09-22：板边剖口只认 Tekla `GetCutPart` 实体切割证明（`cutsFatherSolid=true` / `cutProof=GET_CUT_PART`），不再使用 `t+8/t+12` 等尺寸阈值；未证明一律不进剖口，螺栓孔不再写成洞口。`T3-PX-187` 剖口=否、洞口=否、工序=下料+钻孔。Excel：`outputs/selection-solid-cut-proof/recognition-main-plus-features-relaxed.xlsx`。验证见 `docs/verification/2026-09-21-solid-cut-proof.md`。
 

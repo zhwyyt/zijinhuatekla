@@ -18,6 +18,7 @@ from ..classifiers.composite_main_material_segments import (
 from ..classifiers.weld_backing import classify_weld_backing_plates
 from ..geom.shop import classify_shop_process, classify_shop_shape, is_rolled_profile
 from ..part_roles import MAIN_MATERIAL_LABELS
+from .member_complexity import main_material_geometry_type
 from ..rules import text
 
 FEATURE_COLUMNS = [
@@ -80,8 +81,11 @@ def build_part_feature_rows(
     assembly_id = text(assembly.get("assemblyId"))
     member_id = member_id or text((assembly.get("metadata") or {}).get("assemblyPosition"))
     body_type = algorithm_body_type(member)
-    if "HXZ" in member_id.upper():
+    geometry_type = main_material_geometry_type(assembly, member or {})
+    if geometry_type == "一字板":
         body_type = "一字板"
+    elif geometry_type in {"H钢", "BOX", "十字", "角钢", "槽钢", "圆管"}:
+        body_type = "H" if geometry_type == "H钢" else geometry_type
     main_by_id, inside_ids = _main_material_marks(assembly, member, body_type)
     if body_type == "一字板":
         main_id = text(assembly.get("mainPartId"))
@@ -210,12 +214,12 @@ def _main_material_marks(
         part_id = text(relation.part_id)
         if not part_id:
             continue
-        if relation.relation_to_box_body == "MAIN_WALL":
+        if relation.relation_to_box_body == "MAIN_WALL" and body_type == "BOX":
             main_by_id.setdefault(part_id, "BOX主壁板")
         elif body_type == "BOX" and relation.relation_to_box_body == "INSIDE_BODY":
             inside_ids.add(part_id)
     for group in groups:
-        if group.group_type != "BOX_MAIN_WALL_CONFIRMED_SET":
+        if group.group_type != "BOX_MAIN_WALL_CONFIRMED_SET" or body_type != "BOX":
             continue
         for part_id in group.part_ids:
             token = text(part_id)
