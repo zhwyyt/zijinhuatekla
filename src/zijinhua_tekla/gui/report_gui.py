@@ -384,6 +384,12 @@ class ReportGUI(tk.Tk):
                 f"{result.feature_row_count} 零件 / 错误 {result.error_count}；"
                 f"输出 {result.path}"
             )
+            messagebox.showinfo(
+                "Excel 生成完成",
+                f"构件 {result.complexity_row_count} 个，零件 {result.feature_row_count} 行。\n"
+                f"输出：{result.path}",
+                parent=self,
+            )
             if result.error_count:
                 messagebox.showwarning(
                     "部分构件失败",
