@@ -55,6 +55,31 @@ class MemberComplexityTests(unittest.TestCase):
         self.assertEqual("H钢", result.main_material_type)
         self.assertIn("section.web_and_two_flanges", result.evidence_codes)
 
+    def test_box_with_h_like_counts_and_closed_loop_is_box(self):
+        assembly = {
+            "assemblyId": "A1",
+            "metadata": {"assemblyPosition": "T3-5GKZ-2"},
+            "mainPartId": 10,
+            "parts": [{"partId": 10, "profileString": "PL20*600", "isPlateLike": True}],
+        }
+        member = {
+            "AxisSegments": [{"Direction": {"X": 1, "Y": 0, "Z": 0}}],
+            "Samples": [
+                {
+                    "SectionFeatures": {
+                        "MajorPlateCount": 12,
+                        "CentralVerticalPlateCount": 6,
+                        "CentralHorizontalPlateCount": 6,
+                        "ClosedLoops": 1,
+                        "CavityCount": 1,
+                    }
+                }
+            ],
+        }
+        result = classify_member_complexity(assembly, member, corbel_units=[])
+        self.assertEqual("BOX", result.main_material_type)
+        self.assertIn("section.closed_loop", result.evidence_codes)
+
     def test_section_variation_is_tapered(self):
         assembly = {
             "assemblyId": "A2",

@@ -182,6 +182,11 @@ def _section_composite_type(
         for sample in member.get("Samples") or []
         if isinstance(sample, Mapping)
     ]
+    if any(
+        as_float(feature.get("ClosedLoops")) > 0 or as_float(feature.get("CavityCount")) > 0
+        for feature in features
+    ):
+        return "BOX", ("section.closed_loop",)
     has_h_signature = any(
         as_float(feature.get("MajorPlateCount")) >= 3
         and as_float(feature.get("CentralVerticalPlateCount")) >= 1
@@ -190,11 +195,6 @@ def _section_composite_type(
     )
     if has_h_signature:
         return "H钢", ("section.major_plates>=3", "section.web_and_two_flanges")
-    if any(
-        as_float(feature.get("ClosedLoops")) > 0 or as_float(feature.get("CavityCount")) > 0
-        for feature in features
-    ):
-        return "BOX", ("section.closed_loop",)
     if main_class in {"4", "CROSS"}:
         return "十字", ("main_class.CROSS",)
     return None, ()

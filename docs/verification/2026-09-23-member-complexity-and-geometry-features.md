@@ -8,8 +8,8 @@
 
 ## 输出
 
-- 零件特征：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features.xlsx`
-- 构件复杂度：`outputs/member-complexity-20260922/member-complexity.xlsx`
+- 零件特征（修正版）：`outputs/selection-main-plus-features-20260922/recognition-main-plus-features-geometryfix.xlsx`
+- 构件复杂度（修正版）：`outputs/member-complexity-20260922/member-complexity-geometryfix.xlsx`
 
 ## 命令
 
@@ -21,14 +21,15 @@ python outputs/member-complexity-20260922/run_batch.py
 
 ## 结果
 
-- 单元测试：`220 tests OK`。
+- 单元测试：`221 tests OK`。
 - 零件特征：4044 行，失败 0。
 - 构件复杂度：289 行，失败 0。
 - 零件特征汇总：剖口 467、倒角 1085、割孔 353、切割 1025、洞口 308、螺栓孔 1258、焊接垫板 141。
-- 构件复杂度主材分布：H钢 227、一字板 12、角钢 50。
+- 构件复杂度主材分布：H钢 211、BOX 16、一字板 12、角钢 50。
 - 构件形态分布：变截面 121、同截面 132、折弯 8、多个折弯 28。
 - 牛腿：合计 124；无 228、同一楼层高度 47、多楼层高度 14；方向为垂直 41、斜 15、混合 5。
 - `HXZ` 抽样：13 个构件实例中 8 个主件为单板输出一字板，5 个主件为 `BH/H` 输出 H钢；零件表只把一字板的 `mainPartId` 标为主材，不再把附属板标记为 `BOX主壁板`。
+- `GKZ` 修正：16 个构件实例全部输出 BOX，证据为 `section.closed_loop`。旧修正版曾因 H 板组签名抢在封闭截面证据前，错误输出 H钢。
 
 ## 回归修正
 
@@ -36,6 +37,7 @@ python outputs/member-complexity-20260922/run_batch.py
 - 期望口径：编号不参与判定；`BH/H` 输出 H钢，`PL/FLAT/plateLike` 且无组合截面签名才输出一字板。
 - 证据：`section.major_plates>=3`、`section.web_and_two_flanges`、`section.closed_loop`、`profile.PL`、`main_part.plate_like`。
 - 回归测试：`tests/test_member_complexity.py` 覆盖 `HXZ` 直 H 截面、无组合签名单板和单板组成 H 三种场景。
+- 追加失败案例：`T3-5GKZ-4/10` 等 BOX 柱在端部样本可见 H 形主板计数，但主体样本有 `ClosedLoops=1/CavityCount=1`；封闭截面证据优先，期望输出 BOX。
 
 ## 边界
 
