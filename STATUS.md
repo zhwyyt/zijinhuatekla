@@ -36,7 +36,7 @@
 
 ## 当前阶段
 
-2026-09-23：牛腿判定增加“直接型钢脊柱”补判，必须同时满足型钢截面、不在主体集合、与主体直接 `Weld/Contact`、质心在主体外包盒外；已在 Bracket 簇中的零件去重。`T3-5GKZ-5/7` 各恢复 2 个牛腿，289 装配复杂度输出 0 错误，主材分布保持 H钢 211、BOX 16、一字板 12、角钢 50。Excel：`outputs/member-complexity-20260922/member-complexity-geometry-v6.xlsx`。验证见 `docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
+2026-09-23：牛腿判定增加“直接型钢脊柱”补判，并修正构件复杂度独立重算入口：统一使用 BOX 主壁板分组和 `OUTSIDE_ATTACHMENT` 外伸集合。`T3-5GKZ-5` 恢复 4 个牛腿（2 个 `T3-H-558` 型钢脊柱 + 2 个 `T3-P-4959` 板组），289 装配复杂度输出 0 错误，主材分布保持 H钢 211、BOX 16、一字板 12、角钢 50。Excel：`outputs/member-complexity-20260922/member-complexity-geometry-v7.xlsx`。验证见 `docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
 
 2026-09-23：构件级主材类型改为一次收集几何签名后生成唯一结果；BOX/H/十字/一字板互斥判定，冲突输出 UNKNOWN，编号 `HXZ` 不参与判定。最新选择集 289 装配 0 错误、0 UNKNOWN，16 根 GKZ 全部 BOX。零件特征 Excel 增加“切割”“螺栓孔”列。设计与验证见 `docs/design/2026-09-23-member-complexity-and-geometry-features.md`、`docs/verification/2026-09-23-member-complexity-and-geometry-features.md`。
 

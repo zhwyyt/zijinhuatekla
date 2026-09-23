@@ -9,9 +9,15 @@ from typing import Any
 
 from ..adapters.normalized import normalized_part_from_bundle_part
 from ..classifiers.corbel_units import CorbelUnit, classify_corbel_units
+from ..classifiers.box_main_material_segments import classify_main_material_segment_groups
+from ..classifiers.box_part_spatial_relations import classify_box_part_spatial_relations
 from ..geom.shop import classify_shop_shape
 from ..rules import as_float, norm_spec, text
-from ..spatial_features import classify_appendage_clusters_from_bundle
+from ..spatial_features import (
+    classify_appendage_clusters_from_bundle,
+    main_wall_part_ids_from_groups,
+    outside_box_part_ids_from_relations,
+)
 
 
 _CHANNEL_PREFIXES = ("C", "[", "UNP", "UPN", "PFC")
@@ -106,7 +112,14 @@ def classify_member_complexity(
     main_material_form, form_evidence = _main_material_form(member, main_part, labels)
 
     if corbel_units is None:
-        clusters = classify_appendage_clusters_from_bundle(assembly, member)
+        main_material_groups = classify_main_material_segment_groups(assembly, member)
+        outside_box_part_ids = classify_box_part_spatial_relations(assembly, member, main_material_groups)
+        clusters = classify_appendage_clusters_from_bundle(
+            assembly,
+            member,
+            body_part_ids=main_wall_part_ids_from_groups(main_material_groups),
+            appendage_part_ids=outside_box_part_ids_from_relations(outside_box_part_ids),
+        )
         units = classify_corbel_units(assembly, clusters, member=dict(member))
     else:
         units = list(corbel_units)

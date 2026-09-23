@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict, deque
+from collections.abc import Iterable
 import math
 from typing import Any
 
@@ -25,6 +26,24 @@ def body_part_ids_from_member_roles(member: dict[str, Any]) -> set[str]:
         text(role.get("PartId"))
         for role in roles
         if text(role.get("Role")).lower() in BODY_ROLE_NAMES and text(role.get("PartId"))
+    }
+
+
+def main_wall_part_ids_from_groups(groups: Iterable[Any]) -> set[str]:
+    return {
+        text(part_id)
+        for group in groups
+        if text(getattr(group, "group_type", "")) == "BOX_MAIN_WALL_CONFIRMED_SET"
+        for part_id in getattr(group, "part_ids", [])
+        if text(part_id)
+    }
+
+
+def outside_box_part_ids_from_relations(relations: Iterable[Any]) -> set[str]:
+    return {
+        text(item.part_id)
+        for item in relations
+        if text(getattr(item, "relation_to_box_body", "")) == "OUTSIDE_ATTACHMENT" and text(item.part_id)
     }
 
 

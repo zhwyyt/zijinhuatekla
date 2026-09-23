@@ -1,7 +1,14 @@
 import unittest
+from types import SimpleNamespace
+from unittest import mock
 
 from zijinhua_tekla.bracket_classifier import AppendageRoleClassification
 from zijinhua_tekla.classifiers.corbel_units import classify_corbel_units, is_rolled_spine_profile
+from zijinhua_tekla.reports.member_complexity import classify_member_complexity
+from zijinhua_tekla.spatial_features import (
+    main_wall_part_ids_from_groups,
+    outside_box_part_ids_from_relations,
+)
 
 
 class CorbelUnitTests(unittest.TestCase):
@@ -134,6 +141,59 @@ class CorbelUnitTests(unittest.TestCase):
 
         self.assertEqual(1, len(units))
         self.assertEqual(0, sum(1 for unit in units if "DIRECT_ROLLED_SPINE" in unit.evidence_codes))
+
+    def test_member_complexity_uses_box_wall_groups_for_appendage_clusters(self):
+        main_groups = [SimpleNamespace(group_type="BOX_MAIN_WALL_CONFIRMED_SET", part_ids=["10"])]
+        box_relations = [SimpleNamespace(part_id="20", relation_to_box_body="OUTSIDE_ATTACHMENT")]
+        assembly = {
+            "assemblyId": "100",
+            "mainPartId": "10",
+            "parts": [{"partId": "10", "profileString": "PL16*1000"}],
+        }
+
+        with (
+            mock.patch(
+                "zijinhua_tekla.reports.member_complexity.classify_main_material_segment_groups",
+                return_value=main_groups,
+            ) as main_groups_mock,
+            mock.patch(
+                "zijinhua_tekla.reports.member_complexity.classify_box_part_spatial_relations",
+                return_value=box_relations,
+            ) as box_relations_mock,
+            mock.patch(
+                "zijinhua_tekla.reports.member_complexity.classify_appendage_clusters_from_bundle",
+                return_value=[],
+            ) as clusters_mock,
+            mock.patch(
+                "zijinhua_tekla.reports.member_complexity.classify_corbel_units",
+                return_value=[],
+            ) as units_mock,
+        ):
+            result = classify_member_complexity(assembly, {})
+
+        self.assertEqual(0, result.corbel_count)
+        main_groups_mock.assert_called_once_with(assembly, {})
+        box_relations_mock.assert_called_once_with(assembly, {}, main_groups)
+        clusters_mock.assert_called_once_with(
+            assembly,
+            {},
+            body_part_ids={"10"},
+            appendage_part_ids={"20"},
+        )
+        units_mock.assert_called_once()
+
+    def test_box_wall_and_outside_part_id_helpers(self):
+        groups = [
+            SimpleNamespace(group_type="BOX_MAIN_WALL_CONFIRMED_SET", part_ids=["10", "11"]),
+            SimpleNamespace(group_type="OTHER", part_ids=["12"]),
+        ]
+        relations = [
+            SimpleNamespace(part_id="20", relation_to_box_body="OUTSIDE_ATTACHMENT"),
+            SimpleNamespace(part_id="21", relation_to_box_body="MAIN_WALL"),
+        ]
+
+        self.assertEqual({"10", "11"}, main_wall_part_ids_from_groups(groups))
+        self.assertEqual({"20"}, outside_box_part_ids_from_relations(relations))
 
 
 if __name__ == "__main__":

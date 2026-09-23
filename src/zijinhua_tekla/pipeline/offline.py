@@ -31,7 +31,11 @@ from ..contracts.normalized import NormalizedPart, PartSpatialHints
 from ..features import feature_snapshots_from_bundle_parts
 from ..quality.gate import DataQualityReport, quality_report_from_aligned_rows
 from ..rules import text
-from ..spatial_features import classify_appendage_clusters_from_bundle
+from ..spatial_features import (
+    classify_appendage_clusters_from_bundle,
+    main_wall_part_ids_from_groups,
+    outside_box_part_ids_from_relations,
+)
 from .compare import compare_recognition_to_truth
 
 
@@ -81,8 +85,8 @@ def run_model_recognition(
     spatial_classifications = classify_appendage_clusters_from_bundle(
         assembly,
         member,
-        body_part_ids=_main_wall_part_ids(main_material_groups),
-        appendage_part_ids=_outside_box_part_ids(initial_box_part_spatial_relations),
+        body_part_ids=main_wall_part_ids_from_groups(main_material_groups),
+        appendage_part_ids=outside_box_part_ids_from_relations(initial_box_part_spatial_relations),
     )
     box_part_spatial_relations = classify_box_part_spatial_relations(
         assembly, member, main_material_groups, outside_part_ids=_outside_part_ids(spatial_classifications)
@@ -269,16 +273,6 @@ def _hints_by_part_id(
     return hints
 
 
-def _main_wall_part_ids(groups: list[BoxMainMaterialSegmentGroup]) -> set[str]:
-    return {
-        text(part_id)
-        for group in groups
-        if group.group_type == "BOX_MAIN_WALL_CONFIRMED_SET"
-        for part_id in group.part_ids
-        if text(part_id)
-    }
-
-
 def _outside_part_ids(spatial_classifications: list[Any]) -> set[str]:
     result: set[str] = set()
     for item in spatial_classifications:
@@ -286,14 +280,6 @@ def _outside_part_ids(spatial_classifications: list[Any]) -> set[str]:
             continue
         result.update(text(part_id) for part_id in getattr(item, "part_ids", []) if text(part_id))
     return result
-
-
-def _outside_box_part_ids(relations: list[BoxPartSpatialRelation]) -> set[str]:
-    return {
-        text(item.part_id)
-        for item in relations
-        if item.relation_to_box_body == "OUTSIDE_ATTACHMENT" and text(item.part_id)
-    }
 
 
 def _load_seed_case_bank() -> CaseBank:
