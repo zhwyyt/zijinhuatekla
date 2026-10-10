@@ -488,6 +488,10 @@ def _unit_axes(assembly: Mapping[str, Any], units: Sequence[CorbelUnit]) -> list
 
 
 def _member_axis(member: Mapping[str, Any]) -> tuple[float, float, float] | None:
+    direction = ((member.get("Member") or {}).get("MainAxis") or {}).get("Direction") or {}
+    vector = (as_float(direction.get("X")), as_float(direction.get("Y")), as_float(direction.get("Z")))
+    if any(vector):
+        return vector
     segments = member.get("AxisSegments") or []
     if not segments:
         return None

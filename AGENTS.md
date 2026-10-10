@@ -13,12 +13,15 @@
 -不要默认调用superpowers，只有明确说调用的时候才允许调用。
 ## 当前重点
 
-第一阶段先支持“已深化构件识别到真实加工/配送口径”的离线 JSON/Excel 对齐：
+2026-10-10 已确认正式主线：构件角色识别、构件复杂度识别、零件特征识别。用户确认实验成果已人工验收，包括分组跨度主轴；正式入口以这些成果为基线，不回退旧算法。
 
-- 构件级：梁/柱/埋件等构件类型。
-- 主材级：箱型柱主壁板、BH 型钢、拆板派生件。
-- 零件级：零件角色、加工尺寸、工序、形状、配送用途。
-- 关系级：焊接、螺栓、接触、空间关系，后续服务于组立/装焊顺序。
+- 当前收尾分支：`feat/recognition-mainline`，来源为已验收实验分支。本地 `main` 仍在旧出图历史上，不是当前识别基线；不要盲目切 main 或混合合并。
+- 最小读取集：`STATUS.md`、`TASKLIST.md`、`docs/design/2026-10-10-recognition-mainline.md`。角色或主轴问题再读对应的 2026-09-27 / 2026-09-29 设计。
+- 正式批量入口：`reports.combined.export_combined_excel`，CLI `export-excel` 和 GUI 共用。三张主表为构件角色、构件复杂度、零件特征；连接复核和识别失败仅是辅助表。
+- 角色、截面/主材、零件特征分开表达。旧零件特征中的“构件类型”是主材截面口径，不是新的结构角色。
+- 主轴来自 `I:\xingcaisuanfa` 的 `AlignedSpanMemberAxis`，source=`assemblyParts.alignedSpanCentroid`；Python 消费结果，不复制算法。`Member.MainAxis` 是主段，折线链保留 `AxisSegments/GuidePolyline`。旧缓存必须明确提示重新导出。
+- 零件出图继续独立在 `I:\tmp\zijinhuatekla-part-drawing-engine`、`codex/offline-part-drawing-engine`。识别任务不修改该 worktree、不合并其提交；现有 BOX 工序图代码仅保留兼容，默认识别不出图。
+- 不删除或搬动根目录的本地 CAD/Excel、cache、outputs；按需读取当前样例。历史现场见 `docs/verification/2026-10-10-pre-mainline-memory.md`，不默认预读。
 
 ## 防规则堆砌规则
 

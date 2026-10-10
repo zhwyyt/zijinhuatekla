@@ -27,6 +27,7 @@ from ..classifiers.composite_main_material_segments import (
 from ..classifiers.corbel_units import CorbelUnit, classify_corbel_units
 from ..classifiers.h_beam_part_sides import HBeamPartSide, classify_h_beam_part_sides
 from ..classifiers.weld_backing import classify_weld_backing_plates
+from ..classifiers.member_structural_role import StructuralRoleAssertion, classify_body_bracket_assembly
 from ..contracts.normalized import NormalizedPart, PartSpatialHints
 from ..features import feature_snapshots_from_bundle_parts
 from ..quality.gate import DataQualityReport, quality_report_from_aligned_rows
@@ -59,6 +60,7 @@ class OfflinePipelineResult:
     recognition_rows: list[dict[str, Any]] = field(default_factory=list)
     member_body_type: str = ""
     corbel_units: list[CorbelUnit] = field(default_factory=list)
+    member_structural_role: StructuralRoleAssertion | None = None
 
 
 def run_model_recognition(
@@ -130,6 +132,7 @@ def run_model_recognition(
         recognition_rows=recognition_rows,
         member_body_type=member_body.body_type,
         corbel_units=corbel_units,
+        member_structural_role=classify_body_bracket_assembly(assembly, member),
     )
 
 
@@ -171,6 +174,7 @@ def run_offline_analysis(
         recognition_rows=result.recognition_rows,
         member_body_type=result.member_body_type,
         corbel_units=result.corbel_units,
+        member_structural_role=result.member_structural_role,
     )
 
 

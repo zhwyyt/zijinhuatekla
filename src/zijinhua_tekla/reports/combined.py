@@ -11,13 +11,16 @@ from typing import Any
 import pandas as pd
 
 from ..rules import text
+from ..classifiers.connection_review import connection_review_candidates
 from .member_complexity import MEMBER_COMPLEXITY_COLUMNS, classify_member_complexity
+from .member_role import MEMBER_ROLE_COLUMNS, member_axis_review, member_role_row
 from .part_feature_excel import FEATURE_COLUMNS, build_part_feature_rows
 
 
 BUNDLE_FILENAME = "tekla-body-bracket-export.bundle.json"
 FEATURE_SHEET_NAME = "零件特征"
 COMPLEXITY_SHEET_NAME = "构件复杂度"
+ROLE_SHEET_NAME = "构件角色"
 _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|\r\n]+')
 
 
@@ -28,6 +31,9 @@ class CombinedExcelResult:
     feature_row_count: int
     complexity_row_count: int
     errors: list[dict[str, str]] = field(default_factory=list)
+    role_row_count: int = 0
+    axis_review_count: int = 0
+    connection_review_count: int = 0
 
     @property
     def error_count(self) -> int:
@@ -75,6 +81,9 @@ def export_combined_excel(
     member_cache: dict[str, dict[str, Any]] = {}
     feature_rows: list[dict[str, Any]] = []
     complexity_rows: list[dict[str, Any]] = []
+    role_rows: list[dict[str, Any]] = []
+    successful_assemblies: list[dict[str, Any]] = []
+    axis_review_count = 0
     errors: list[dict[str, str]] = []
     for assembly in assemblies:
         member_id = text((assembly.get("metadata") or {}).get("assemblyPosition"))
@@ -85,12 +94,14 @@ def export_combined_excel(
                     member_id,
                 )
             member = member_cache[member_id]
-            feature_rows.extend(
-                build_part_feature_rows(assembly, member, member_id)
-            )
-            complexity_rows.append(
-                classify_member_complexity(assembly, member).to_row()
-            )
+            features = build_part_feature_rows(assembly, member, member_id)
+            complexity = classify_member_complexity(assembly, member).to_row()
+            role = member_role_row(assembly, member)
+            feature_rows.extend(features)
+            complexity_rows.append(complexity)
+            role_rows.append(role)
+            successful_assemblies.append(assembly)
+            axis_review_count += bool(member_axis_review(assembly, member)[1])
         except Exception as exc:
             errors.append(
                 {
@@ -111,17 +122,29 @@ def export_combined_excel(
         complexity_rows,
         columns=MEMBER_COMPLEXITY_COLUMNS,
     )
+    reviews = connection_review_candidates(successful_assemblies)
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        pd.DataFrame(role_rows, columns=MEMBER_ROLE_COLUMNS).to_excel(
+            writer, index=False, sheet_name=ROLE_SHEET_NAME,
+        )
+        complexity_frame.to_excel(
+            writer, index=False, sheet_name=COMPLEXITY_SHEET_NAME,
+        )
         feature_frame.to_excel(
             writer,
             index=False,
             sheet_name=FEATURE_SHEET_NAME,
         )
-        complexity_frame.to_excel(
-            writer,
-            index=False,
-            sheet_name=COMPLEXITY_SHEET_NAME,
-        )
+        if reviews:
+            pd.DataFrame([item.to_dict() for item in reviews]).rename(columns={
+                "assembly_id": "装配ID", "assembly_position": "构件名称",
+                "other_assembly_id": "候选装配ID", "other_assembly_position": "候选构件名称",
+                "gap_mm": "间隙mm", "issue_type": "复核类型", "note": "复核说明",
+            }).to_excel(writer, index=False, sheet_name="连接复核")
+        if errors:
+            pd.DataFrame(errors).rename(columns={
+                "member_id": "构件名称", "assembly_id": "装配ID", "error": "失败原因",
+            }).to_excel(writer, index=False, sheet_name="识别失败")
 
     return CombinedExcelResult(
         path=path,
@@ -129,6 +152,9 @@ def export_combined_excel(
         feature_row_count=len(feature_rows),
         complexity_row_count=len(complexity_rows),
         errors=errors,
+        role_row_count=len(role_rows),
+        axis_review_count=axis_review_count,
+        connection_review_count=len(reviews),
     )
 
 

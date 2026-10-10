@@ -386,7 +386,9 @@ class ReportGUI(tk.Tk):
             )
             messagebox.showinfo(
                 "Excel 生成完成",
-                f"构件 {result.complexity_row_count} 个，零件 {result.feature_row_count} 行。\n"
+                f"构件角色 {result.role_row_count} 行，构件复杂度 {result.complexity_row_count} 行，"
+                f"零件特征 {result.feature_row_count} 行。\n"
+                f"主轴需复核 {result.axis_review_count} 个，连接复核 {result.connection_review_count} 条。\n"
                 f"输出：{result.path}",
                 parent=self,
             )
@@ -394,6 +396,13 @@ class ReportGUI(tk.Tk):
                 messagebox.showwarning(
                     "部分构件失败",
                     f"Excel 已生成，但有 {result.error_count} 个构件失败。",
+                    parent=self,
+                )
+            elif result.axis_review_count:
+                messagebox.showwarning(
+                    "旧主轴缓存需重新导出",
+                    f"{result.axis_review_count} 个构件未能确认使用已验收的分组跨度主轴。"
+                    "请使用当前导出器重新导出；本次结果仅供诊断。",
                     parent=self,
                 )
         else:

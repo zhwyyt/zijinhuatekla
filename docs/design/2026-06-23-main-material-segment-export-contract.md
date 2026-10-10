@@ -39,7 +39,7 @@
 
 ## Semantics
 
-`memberAxisEvidence` 是构件主轴证据，当前由 main part 的最长局部轴推导。后续如果接入更准确的 member axis 或 Tekla MCP，可以替换 source，但消费层字段保持稳定。
+`memberAxisEvidence` 是构件主轴证据。方向、原点和长度按 `docs/design/2026-09-29-aligned-span-member-axis.md` 计算。成功时 `source` 为 `assemblyParts.alignedSpanCentroid`。消费层字段保持 `origin`、`direction`、`length`、`source`。`length` 是主段覆盖长度。主材提取的 `Member.MainAxis` 使用同一主段；折线时 `AxisSegments` 另外带上第二段。
 
 `axisStationStart/End` 表示零件包围盒投影到构件主轴后的区间，用于判断主轴方向分段顺序和接缝间隙。
 

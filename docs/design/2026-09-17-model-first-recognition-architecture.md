@@ -112,7 +112,7 @@ Shapely 必须藏在 `geom.planar` 后面，分类器只问「这个投影点相
 - 切割计数：`booleanCutCount`（**详情不完整**，见缺口）
 - 焊缝：`weldDetails[]`（主从件、类型、尺寸、车间/现场）
 - 关系图：assembly `relationships[]`（Contact / Weld / Bolt）
-- 构件证据：`memberAxisEvidence`、`boxSectionEvidence.stationLoops`、`hBeamSectionEvidence.stationFrames`
+- 构件证据：`memberAxisEvidence`（当前判定见 `docs/design/2026-09-29-aligned-span-member-axis.md`）、`boxSectionEvidence.stationLoops`、`hBeamSectionEvidence.stationFrames`
 - 主材证据：`mainMaterialEvidence`（station 起止、`bodyFaceId`、邻接 gap、截面投影）
 
 这些足够做：零件级加工尺寸/孔/切/焊特征、BOX/H 主材分段、截面形状 BOX/H/CROSS、车间形状（方块/异形/异形主材）的第一版、附属件簇种子。

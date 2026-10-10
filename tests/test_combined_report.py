@@ -13,7 +13,7 @@ from zijinhua_tekla.reports.combined import (
 
 
 class CombinedReportTests(unittest.TestCase):
-    def test_export_one_workbook_with_two_sheets(self):
+    def test_export_one_workbook_with_three_main_sheets(self):
         with TemporaryDirectory() as temp:
             root = Path(temp)
             assembly = {
@@ -61,9 +61,11 @@ class CombinedReportTests(unittest.TestCase):
             self.assertEqual(1, result.assembly_count)
             self.assertEqual(1, result.feature_row_count)
             self.assertEqual(1, result.complexity_row_count)
+            self.assertEqual(1, result.role_row_count)
+            self.assertEqual(1, result.axis_review_count)
             self.assertEqual(0, result.error_count)
             self.assertEqual("项目_A_区域_B.xlsx", result.path.name)
-            self.assertEqual(["零件特征", "构件复杂度"], workbook.sheetnames)
+            self.assertEqual(["构件角色", "构件复杂度", "零件特征"], workbook.sheetnames)
             workbook.close()
 
     def test_invalid_root_is_rejected(self):

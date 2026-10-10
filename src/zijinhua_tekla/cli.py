@@ -4,6 +4,7 @@ from pathlib import Path
 from .pipeline.offline import run_model_recognition, run_offline_analysis
 from .reports.offline import write_offline_analysis_report
 from .reports.recognition import write_recognition_workbook
+from .reports.combined import export_combined_excel
 
 
 def analyze(root, truth_root, member_id, assembly_id=None):
@@ -27,6 +28,11 @@ def build_parser():
     analyze_parser.add_argument("--truth-root", default="")
     analyze_parser.add_argument("--draw", action="store_true", help="Also write BOX drawing steps DXF.")
     sub.add_parser("gui", help="Open the combined Tekla export Excel GUI.")
+    batch_parser = sub.add_parser("export-excel", help="Export member roles, complexity and part features for a bundle.")
+    batch_parser.add_argument("--root", required=True)
+    batch_parser.add_argument("--project-name", required=True)
+    batch_parser.add_argument("--project-area", required=True)
+    batch_parser.add_argument("--out", default="outputs")
     return parser
 
 
@@ -48,6 +54,14 @@ def main(argv=None):
 
     root = Path(args.root)
     out_dir = Path(args.out)
+    if args.command == "export-excel":
+        result = export_combined_excel(root, args.project_name, args.project_area, out_dir)
+        print(f"Wrote {result.path}")
+        print(f"Roles={result.role_row_count} Complexity={result.complexity_row_count} Parts={result.feature_row_count} Errors={result.error_count}")
+        print(f"AxisReview={result.axis_review_count} ConnectionReview={result.connection_review_count}")
+        if result.error_count:
+            raise SystemExit(1)
+        return
     assembly_id = args.assembly_id or None
     include_drawings = bool(getattr(args, "draw", False))
 

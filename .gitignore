@@ -24,9 +24,13 @@ obj/
 *.dxf
 *.bak
 *.zip
+*.dwl
+*.dwl2
 
 # Local process-drawing reference notes
 /给Codex的工序图技术指导*.md
+/Tekla_自动详图系统中间数据模型规范_SIM.md
+/docs/references/tekla-part-drawing-annotation-constraints.md
 
 # Editor and OS noise
 .DS_Store
@@ -37,3 +41,6 @@ Thumbs.db
 # Local notes not committed
 /docs/project-overview.md
 /聊天记录.md
+
+# Historical local skill previews, not project runtime
+/.superpowers/
