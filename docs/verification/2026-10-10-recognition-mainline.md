@@ -45,6 +45,8 @@ python -m zijinhua_tekla.cli export-excel --root cache/20260922_173818 --project
 
 提交前执行 CCG verify-change 并核对 staged 文件范围、Git numstat、设计、README 和相关测试。CCG 的 staged 模式不统计行数，且当前脚本不把 `.cs` 识别为代码；导出器另用源码范围核对、构建和用户人工验收作为证据，不能把该脚本的零行统计当作无代码改动。
 
+识别仓库校验实际覆盖 31 个文件，passed=true；两个新增模块 README 信息提示由本轮根 README 和主线设计覆盖。功能基线 `0701e89` 已推送到 `origin/feat/recognition-mainline`，导出器 `71a95bb` 已推送到对应独立分支。收尾状态记录随后单独提交，不修改已验证的代码。
+
 ## 抽象复盘
 
 适用场景：模型导出器与离线识别分属不同仓库，存在实验算法、正式入口及历史缓存。
