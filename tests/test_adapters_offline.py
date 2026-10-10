@@ -8,6 +8,7 @@ import pandas as pd
 from zijinhua_tekla.adapters.offline import (
     load_bundle,
     load_member,
+    load_member_snapshots,
     load_member_assembly_id,
     load_roles,
     load_truth_rows,
@@ -15,6 +16,25 @@ from zijinhua_tekla.adapters.offline import (
 
 
 class OfflineAdapterTests(unittest.TestCase):
+    def test_batch_recovers_member_even_when_individual_file_is_missing(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "members").mkdir()
+            member = {"Member": {"AssemblyId": "100", "MemberId": "SAME"}}
+            (root / "members/batch_summary.json").write_text(json.dumps({"Members": [member]}), encoding="utf-8")
+            self.assertEqual(member, load_member(root, "SAME", "100"))
+            with self.assertRaisesRegex(ValueError, "编号不一致"):
+                load_member(root, "OTHER", "100")
+
+    def test_duplicate_batch_assembly_ids_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "members").mkdir()
+            member = {"Member": {"AssemblyId": "100", "MemberId": "SAME"}}
+            (root / "members/batch_summary.json").write_text(json.dumps({"Members": [member, member]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "装配ID重复"):
+                load_member_snapshots(root)
+
     def test_load_truth_rows_normalizes_excel_rows_for_member(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

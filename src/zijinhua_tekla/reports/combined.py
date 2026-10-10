@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections import Counter
 import json
 import re
 from pathlib import Path
@@ -11,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 from ..rules import text
+from ..adapters.offline import load_member, load_member_snapshots
 from ..classifiers.connection_review import connection_review_candidates
 from .member_complexity import MEMBER_COMPLEXITY_COLUMNS, classify_member_complexity
 from .member_role import MEMBER_ROLE_COLUMNS, member_axis_review, member_role_row
@@ -78,7 +80,8 @@ def export_combined_excel(
     if not assemblies:
         raise ValueError("Tekla 导出包中没有 assemblies")
 
-    member_cache: dict[str, dict[str, Any]] = {}
+    batch_members = load_member_snapshots(Path(source["root"]))
+    position_counts = Counter(text((item.get("metadata") or {}).get("assemblyPosition")) for item in assemblies)
     feature_rows: list[dict[str, Any]] = []
     complexity_rows: list[dict[str, Any]] = []
     role_rows: list[dict[str, Any]] = []
@@ -88,12 +91,12 @@ def export_combined_excel(
     for assembly in assemblies:
         member_id = text((assembly.get("metadata") or {}).get("assemblyPosition"))
         try:
-            if member_id not in member_cache:
-                member_cache[member_id] = _load_member(
-                    Path(source["root"]),
-                    member_id,
-                )
-            member = member_cache[member_id]
+            member = load_member(
+                Path(source["root"]), member_id, text(assembly.get("assemblyId")),
+                batch_members=batch_members,
+            )
+            if position_counts[member_id] > 1 and not text((member.get("Member") or {}).get("AssemblyId")):
+                raise ValueError("同号多实例的构件快照缺少装配ID，不能确认对应关系")
             features = build_part_feature_rows(assembly, member, member_id)
             complexity = classify_member_complexity(assembly, member).to_row()
             role = member_role_row(assembly, member)
@@ -156,13 +159,6 @@ def export_combined_excel(
         axis_review_count=axis_review_count,
         connection_review_count=len(reviews),
     )
-
-
-def _load_member(root: Path, member_id: str) -> dict[str, Any]:
-    path = root / "members" / f"member_{member_id}.json"
-    if not path.is_file():
-        raise FileNotFoundError(f"缺少构件导出文件：{path}")
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _report_filename(project_name: str, project_area: str) -> str:

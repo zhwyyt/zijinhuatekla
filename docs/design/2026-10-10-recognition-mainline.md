@@ -36,3 +36,13 @@
 - `python -m unittest discover -s tests`，完整输出落盘，聊天只报告计数和结论。
 - 对本地导出缓存做有界离线 smoke，输出到独立 `outputs/recognition-mainline-20261010`，明确缓存主轴版本；不自动启动真实 Tekla 导出。
 - 提交前运行 CCG `verify-change --mode staged`，检查相关设计、README 与测试同步。
+
+## 2026-10-10 真实选择集补充：装配实例身份
+
+979 个装配的真实导出暴露同号 member 文件覆盖：只有 652 个独立文件，327 个装配原先读取其它同号实例。完整 `members/batch_summary.json` 保留了全部实例，不需要重新推算几何或更改已验收算法。
+
+批量入口优先按 `AssemblyId` 索引 batch 快照；编号只校验位置号一致。旧独立文件只在实例 ID 一致时使用，缺失的旧身份字段仅兼容单一位置号；同号多实例缺身份必须失败。重复 batch ID 必须明确拒绝，不能静默覆盖。单构件指定 assembly ID 时使用相同解析器。
+
+Acceptance Criteria：同号水平/竖直实例保留各自轴线与姿态；不能恢复的实例进入识别失败；不遗留半套主表；已验收角色、复杂度、特征算法不变。
+
+Verification Plan：同号不同姿态回归、缺失 batch / 重复 ID / 位置号不符 / 无独立文件但有完整 batch 的解析测试、单构件显式 ID 回归；随后用同一已导出的 979 装配包重新运行正式入口，并保留首次结果作为失败证据。

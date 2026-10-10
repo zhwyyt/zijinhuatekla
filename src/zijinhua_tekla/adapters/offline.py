@@ -41,9 +41,46 @@ def load_truth_rows(truth_root: Path, member_id: str) -> list[dict[str, Any]]:
     return rows
 
 
-def load_member(root: Path, member_id: str) -> dict[str, Any]:
-    path = root / "members" / f"member_{member_id}.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+def load_member_snapshots(root: Path) -> dict[str, dict[str, Any]]:
+    """Index the complete batch by physical assembly, never by position number."""
+    path = root / "members" / "batch_summary.json"
+    if not path.is_file():
+        return {}
+    batch = json.loads(path.read_text(encoding="utf-8"))
+    members: dict[str, dict[str, Any]] = {}
+    for member in batch.get("Members") or []:
+        assembly_id = text((member.get("Member") or {}).get("AssemblyId"))
+        if not assembly_id:
+            continue
+        if assembly_id in members:
+            raise ValueError(f"batch_summary 中装配ID重复：{assembly_id}")
+        members[assembly_id] = member
+    return members
+
+
+def load_member(
+    root: Path,
+    member_id: str,
+    assembly_id: str | None = None,
+    *,
+    batch_members: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    expected_id = text(assembly_id)
+    member = None
+    if expected_id:
+        snapshots = load_member_snapshots(root) if batch_members is None else batch_members
+        member = snapshots.get(expected_id)
+    if member is None:
+        path = root / "members" / f"member_{member_id}.json"
+        member = json.loads(path.read_text(encoding="utf-8"))
+    identity = member.get("Member") or {}
+    actual_id = text(identity.get("AssemblyId"))
+    actual_position = text(identity.get("MemberId"))
+    if expected_id and actual_id and actual_id != expected_id:
+        raise ValueError(f"构件快照装配ID不一致：需要 {expected_id}，实际 {actual_id}；缺少该实例的 batch_summary 快照")
+    if expected_id and actual_position and actual_position != member_id:
+        raise ValueError(f"构件快照编号不一致：需要 {member_id}，实际 {actual_position}")
+    return member
 
 
 def load_member_assembly_id(root: Path, member_id: str) -> str:

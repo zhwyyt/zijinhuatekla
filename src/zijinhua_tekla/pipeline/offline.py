@@ -69,7 +69,7 @@ def run_model_recognition(
     assembly_id: str | None = None,
     include_drawings: bool = False,
 ) -> OfflinePipelineResult:
-    member = load_member(root, member_id)
+    member = load_member(root, member_id, assembly_id)
     resolved_assembly_id = assembly_id or load_member_assembly_id(root, member_id)
     assembly, _by_pos, rel_by_part, bundle = load_bundle(root, resolved_assembly_id)
     snapshots = feature_snapshots_from_bundle_parts(assembly.get("parts", []), rel_by_part)
