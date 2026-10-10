@@ -104,6 +104,8 @@ python -m zijinhua_tekla.cli export-excel --root cache/selected-mainline-2026101
 
 本地功能提交为 `f5e0ffc`，工作区已收敛。推送被自动审批拒绝，理由是未确认具体 GitHub 目的地的私有归属，可能公开内部源码/案例。随后只读核对：登录账号 `zhwyyt`，仓库 `zhwyyt/zijinhuatekla`，viewerPermission=ADMIN，isPrivate=false。因此本轮未推送，等待用户明确批准向该公开仓库发送本次源码和验证记录；没有通过替代命令绕过拒绝。公开状态核查只返回账号和仓库元数据，不输出凭据。
 
+后续授权与交付：用户明确回复“推送”，批准上述公开目的地和内容。`git push origin feat/recognition-mainline` 已成功，远端从 `5a6ca50` 更新至 `6309a5e`，包含功能修复 `f5e0ffc`；此次仅同步识别收尾分支，未推 main、缓存或 Excel。
+
 ## 抽象复盘
 
 可复用认知：制造位置号表达同类构件，装配 ID 表达物理实例。位置号级文件不能承担实例级空间几何缓存；按数量汇总正确并不保证姿态、牛腿方向或楼层正确。此次最初遗漏在于小选择集的同号覆盖没有造成可见主表变化，之前只验证报告行数和主轴 source，没有联查 bundle 与 member 的实例身份。

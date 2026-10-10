@@ -27,4 +27,4 @@
 
 [选择集重新导出与对比记录](docs/verification/2026-10-10-selected-mainline-reexport-comparison.md) 包含范围、最终成果、实例修复、274 项回归和待复核案例。下一步优先查主材分段/特征消费与新长轴的关系，再按现场证据确定策略；本轮没有确认这些新增现场标签全部人工验收。
 
-修复已本地提交 `f5e0ffc`。远端 `zhwyyt/zijinhuatekla` 为公开仓库（当前账号同名、ADMIN）；自动审批以项目源码/验证记录公开外传风险拒绝推送。待用户明确批准本次公开推送；不重试或绕过。数据与 Excel 未进 Git。
+修复提交 `f5e0ffc` 和交付记录 `6309a5e` 已推送至 `origin/feat/recognition-mainline`。远端 `zhwyyt/zijinhuatekla` 为公开仓库；此前自动审批拒绝后，用户明确回复“推送”，已批准此次公开发布。数据与 Excel 未进 Git。
