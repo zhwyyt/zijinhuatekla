@@ -7,6 +7,59 @@ from zijinhua_tekla.classifiers.box_main_material_segments import (
 
 
 class BoxMainMaterialSegmentTests(unittest.TestCase):
+    def test_direct_profile_body_does_not_promote_short_attachment_walls(self):
+        assembly = {"assemblyId": "SAMPLE", "mainPartId": "main", "metadata": {
+            "memberAxisEvidence": {"length": 11000},
+            "boxSectionEvidence": {"stationLoops": [{"station": 1500, "partLoops": [
+                _section_loop_part("a", 0, 0, 100, 10),
+                _section_loop_part("b", 0, 90, 100, 100),
+            ]}]},
+        }, "parts": [
+            {"partId": "main", "profileString": "BH950*400*16*30", "isPlateLike": False},
+            _wall_part("a", "P-a", "RADIAL_Y_NEG", 0, 3000),
+            _wall_part("b", "P-b", "RADIAL_Y_POS", 0, 3000),
+        ], "relationships": []}
+
+        groups = classify_box_main_material_segment_groups(assembly)
+
+        self.assertFalse(any(group.group_type == "BOX_MAIN_WALL_CONFIRMED_SET" for group in groups))
+
+    def test_long_assembly_axis_keeps_wall_seeds_from_each_section(self):
+        parts = []
+        stations = []
+        for prefix, start in [("a", 0), ("b", 3000), ("c", 6000)]:
+            ids = [prefix + str(i) for i in range(4)]
+            for pid, face in zip(ids, ["RADIAL_Y_NEG", "RADIAL_Y_POS", "RADIAL_X_NEG", "RADIAL_X_POS"]):
+                parts.append(_wall_part(pid, "P-" + pid, face, start, start + 3000))
+            stations.append({"station": start + 1500, "partLoops": [
+                _section_loop_part(ids[0], 0, 0, 100, 10),
+                _section_loop_part(ids[1], 0, 90, 100, 100),
+                _section_loop_part(ids[2], 0, 0, 10, 100),
+                _section_loop_part(ids[3], 90, 0, 100, 100),
+            ]})
+        # A huge transverse plate must not set the longitudinal length reference.
+        transition = _wall_part("short", "P-transition", "RADIAL_Y_NEG", 1200, 1400)
+        transition["mainMaterialEvidence"]["sectionProjectionEvidence"] = {"normalProjectionMagnitude": 0.17}
+        transverse = _wall_part("transverse", "P-transverse", "RADIAL_Y_NEG", 0, 50000)
+        transverse["mainMaterialEvidence"]["sectionProjectionEvidence"] = {"normalProjectionMagnitude": 0.17}
+        parts.extend([transition, transverse, _wall_part("inner", "P-inner", "INNER", 0, 3000),
+                      _wall_part("isolated", "P-isolated", "RADIAL_Y_NEG", 12000, 15000)])
+        stations[0]["partLoops"].extend([
+            _section_loop_part("short", -100, -100, 200, 200),
+            _section_loop_part("transverse", -200, -200, 300, 300),
+            _section_loop_part("inner", 40, 40, 60, 60),
+        ])
+        assembly = {"assemblyId": "SAMPLE", "metadata": {
+            "memberAxisEvidence": {"length": 11000, "source": "assemblyParts.alignedSpanCentroid"},
+            "boxSectionEvidence": {"stationLoops": stations},
+        }, "parts": parts, "relationships": []}
+
+        groups = classify_box_main_material_segment_groups(assembly)
+
+        confirmed = {pid for group in groups if group.group_type == "BOX_MAIN_WALL_CONFIRMED_SET" for pid in group.part_ids}
+        self.assertEqual({prefix + str(i) for prefix in "abc" for i in range(4)}, confirmed)
+        self.assertEqual(11000, assembly["metadata"]["memberAxisEvidence"]["length"])
+
     def test_groups_same_face_adjacent_station_segments_without_requiring_same_thickness(self):
         assembly = {
             "assemblyId": "A-1",

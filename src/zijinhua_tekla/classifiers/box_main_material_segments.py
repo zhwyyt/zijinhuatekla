@@ -375,8 +375,9 @@ def _box_section_topology_seed_part_ids(assembly: dict[str, Any], candidate_part
     seed_candidate_ids = _long_axis_wall_seed_candidate_ids(assembly, candidate_parts)
     if not seed_candidate_ids:
         return set()
-    best_ids: set[str] = set()
+    seed_part_ids: set[str] = set()
     best_score = 0.0
+    direct_profile_body = _has_direct_profile_body(assembly)
     for station in station_loops:
         if not isinstance(station, dict):
             continue
@@ -393,16 +394,37 @@ def _box_section_topology_seed_part_ids(assembly: dict[str, Any], candidate_part
             if polygons:
                 part_polygons.setdefault(part_id, []).extend(polygons)
         seed_ids, score = _outer_shell_part_ids(part_polygons)
-        if score > best_score and seed_ids:
-            best_score = score
-            best_ids = seed_ids
-    return best_ids
+        if direct_profile_body:
+            if score > best_score and seed_ids:
+                best_score = score
+                seed_part_ids = seed_ids
+            continue
+        if score > 0 and seed_ids:
+            seed_part_ids.update(seed_ids)
+    return seed_part_ids
+
+
+def _has_direct_profile_body(assembly: dict[str, Any]) -> bool:
+    main_part_id = text(assembly.get("mainPartId"))
+    return any(
+        text(part.get("partId")) == main_part_id and part.get("isPlateLike") is False
+        for part in assembly.get("parts", [])
+    )
 
 
 def _long_axis_wall_seed_candidate_ids(assembly: dict[str, Any], candidate_parts: list[dict[str, Any]]) -> set[str]:
     axis_length = as_float(assembly.get("metadata", {}).get("memberAxisEvidence", {}).get("length"))
+    longest_wall_span = max(
+        (_station_end(part) - _station_start(part) for part in candidate_parts
+         if _normal_projection_magnitude(part) == 0 or _normal_projection_magnitude(part) >= 0.65),
+        default=0.0,
+    )
+    # A whole-member axis may cover several short, individually modelled walls.
+    # Length filters select local wall seeds; section topology confirms the body.
     if axis_length <= 0:
         axis_length = max((_station_end(part) - _station_start(part) for part in candidate_parts), default=0.0)
+    if longest_wall_span > 0 and not _has_direct_profile_body(assembly):
+        axis_length = min(axis_length, longest_wall_span)
     result = set()
     for part in candidate_parts:
         part_id = text(part.get("partId"))

@@ -1,5 +1,7 @@
 # Tekla 当前选择集重新导出与旧结果对比
 
+本记录保留重新导出及实例身份修复的历史证据。用户后续指出 GKZ 牛腿归零，已在 [GKZ 牛腿回归验证](2026-10-10-gkz-corbel-regression.md) 修复；最新交付以 `gkz-fixed/` 报告为准，本文的 `corrected/` 不再作为最终成果。
+
 ## 范围与成功标准
 
 2026-10-10 用户已在 Tekla 选好构件，授权重新导出、运行识别主线并与原有结果比较。使用 `feat/recognition-mainline` / `5a6ca50`，导出器使用 `feat/accepted-recognition-axis` / `71a95bb`。本次验证不改人工标签，已有实验算法人工验收仍有效。
