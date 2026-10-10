@@ -24,6 +24,7 @@ class SegmentedBoxCorbelRegressionTests(unittest.TestCase):
                 member_before = copy.deepcopy(member)
                 result = classify_member_complexity(assembly, member)
                 self.assertEqual(expected, result.corbel_count)
+                self.assertEqual("BOX", result.main_material_type)
                 self.assertEqual(axis_before, assembly["metadata"]["memberAxisEvidence"])
                 self.assertEqual(member_before, member)
 

@@ -7182,6 +7182,203 @@
           "Start": 7797.658666599883
         }
       }
+    ],
+    "Samples": [
+      {
+        "IsAbnormal": true,
+        "AbnormalReason": "dense_attachment_zone",
+        "SampleId": "S01",
+        "Station": 1106.129377289081,
+        "SectionFeatures": {
+          "CavityCount": 1,
+          "CentralHorizontalPlateCount": 2,
+          "CentralVerticalPlateCount": 2,
+          "ClosedLoops": 1,
+          "MajorPlateCount": 4,
+          "OuterHeight": 1000.7562852249248,
+          "OuterWidth": 1000.0041987785263
+        },
+        "SectionParts": [
+          {
+            "PartId": "19",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 968.0002901799483
+          },
+          {
+            "PartId": "16",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 1000.0001312083223
+          },
+          {
+            "PartId": "17",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 1000.0001312084569
+          },
+          {
+            "PartId": "18",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 968.0002901799485
+          }
+        ]
+      },
+      {
+        "IsAbnormal": true,
+        "AbnormalReason": "dense_attachment_zone",
+        "SampleId": "S02",
+        "Station": 3318.3881318672425,
+        "SectionFeatures": {
+          "CavityCount": 0,
+          "CentralHorizontalPlateCount": 4,
+          "CentralVerticalPlateCount": 2,
+          "ClosedLoops": 0,
+          "MajorPlateCount": 6,
+          "OuterHeight": 1001.0408448605012,
+          "OuterWidth": 1949.4927161120577
+        },
+        "SectionParts": [
+          {
+            "PartId": "19",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 968.0002901799487
+          },
+          {
+            "PartId": "23",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 1949.4514170215348
+          },
+          {
+            "PartId": "16",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 1000.0001312084496
+          },
+          {
+            "PartId": "17",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 1000.0001312084569
+          },
+          {
+            "PartId": "22",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 1949.4927161120577
+          },
+          {
+            "PartId": "18",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 968.0002901799485
+          }
+        ]
+      },
+      {
+        "IsAbnormal": true,
+        "AbnormalReason": "dense_attachment_zone",
+        "SampleId": "S03",
+        "Station": 5530.646886445405,
+        "SectionFeatures": {
+          "CavityCount": 1,
+          "CentralHorizontalPlateCount": 2,
+          "CentralVerticalPlateCount": 2,
+          "ClosedLoops": 1,
+          "MajorPlateCount": 4,
+          "OuterHeight": 916.9948528756613,
+          "OuterWidth": 909.5146713421069
+        },
+        "SectionParts": [
+          {
+            "PartId": "23",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 840.1072520322426
+          },
+          {
+            "PartId": "20",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 900.9074610178977
+          },
+          {
+            "PartId": "21",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 900.9074609946038
+          },
+          {
+            "PartId": "22",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 840.1080857088132
+          }
+        ]
+      },
+      {
+        "IsAbnormal": true,
+        "AbnormalReason": "dense_attachment_zone",
+        "SampleId": "S04",
+        "Station": 7742.905641023566,
+        "SectionFeatures": {
+          "CavityCount": 0,
+          "CentralHorizontalPlateCount": 0,
+          "CentralVerticalPlateCount": 0,
+          "ClosedLoops": 0,
+          "MajorPlateCount": 0,
+          "OuterHeight": 900.1641764283595,
+          "OuterWidth": 900.1511269612561
+        },
+        "SectionParts": [
+          {
+            "PartId": "24",
+            "RoleHint": "stiffener_candidate",
+            "TotalCutLength": 868.0026815680803
+          },
+          {
+            "PartId": "26",
+            "RoleHint": "stiffener_candidate",
+            "TotalCutLength": 900.0026786435119
+          },
+          {
+            "PartId": "25",
+            "RoleHint": "stiffener_candidate",
+            "TotalCutLength": 900.0026786435083
+          },
+          {
+            "PartId": "27",
+            "RoleHint": "stiffener_candidate",
+            "TotalCutLength": 868.0026815680793
+          }
+        ]
+      },
+      {
+        "IsAbnormal": true,
+        "AbnormalReason": "dense_attachment_zone",
+        "SampleId": "S05",
+        "Station": 9955.164395601729,
+        "SectionFeatures": {
+          "CavityCount": 1,
+          "CentralHorizontalPlateCount": 2,
+          "CentralVerticalPlateCount": 2,
+          "ClosedLoops": 1,
+          "MajorPlateCount": 4,
+          "OuterHeight": 900.0227013122494,
+          "OuterWidth": 913.5239976999023
+        },
+        "SectionParts": [
+          {
+            "PartId": "31",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 852.3718125621319
+          },
+          {
+            "PartId": "28",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 900.0002497000314
+          },
+          {
+            "PartId": "29",
+            "RoleHint": "web_candidate",
+            "TotalCutLength": 900.0002496868728
+          },
+          {
+            "PartId": "30",
+            "RoleHint": "flange_candidate",
+            "TotalCutLength": 852.3718125621776
+          }
+        ]
+      }
     ]
   }
 }

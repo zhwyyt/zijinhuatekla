@@ -22,11 +22,14 @@
 - [x] 修复 16 个 GKZ 牛腿归零：局部壁板跨度 + 多截面种子，原生非板主体保留原口径；不改已验收主轴或牛腿评分。
 - [x] 冻结匿名 4 / 2 个牛腿真实回归及型钢主体负例；279 tests OK，新旧 32 实例数量与牛腿单元身份一致。
 - [x] 979 装配正式重跑到 `gkz-fixed/`；非 GKZ 字段变化为 0，16 个 GKZ 与派生零件标记变动记录在验证文件。
-- [ ] 复核 6 个主材类型变化，优先定位长轴下的分段/特征消费和分类策略；不以旧标签自动当真值。
+- [x] 定位主材误判：整轴长度门槛及密集附属区截面计数冲突；以局部 BOX/H 核心零件证据适配，不按编号硬补。
+- [x] 完整截面路径绕开旧长度/占比限制，保留真实冲突、原生主件和附属板边界；293 tests OK。
+- [x] 同一 979 装配正式重跑到 `outputs/main-material-axis-20261010/delivery/`；4 个 GKZ 恢复 BOX、4 个梁确认 H 钢，32 个新旧 GKZ 牛腿身份保持。
+- [ ] 人工复核本轮 8 个主材类型变化及 74 行新增主材标记、关联派生字段；自动几何验证不替代人工验收。
 - [ ] 复核 T3-6GL-49 / 70991529 的零长度、零方向主轴，补足几何证据后再确认；不能仅按 source 验收。
 - [ ] 后续如需整合 main，以识别基线为准另行处理，避免把独立出图分支一起合入。
 - [ ] 零件出图在独立 worktree 继续开发，历史未完成项见收敛前现场记录。
 
 历史完成项、旧待办与失败路径保存在 [收敛前项目记忆](docs/verification/2026-10-10-pre-mainline-memory.md)，不再混入当前任务队列。
 
-最新现场、对比文件和失败归因见 [GKZ 回归验证](docs/verification/2026-10-10-gkz-corbel-regression.md)，导出范围见 [选择集验证](docs/verification/2026-10-10-selected-mainline-reexport-comparison.md)。最终结果以本次输出目录的 gkz-fixed 子目录为准；621 个未知角色不强行命中，派生零件标记与主材 UNKNOWN 后续按业务证据复核。
+最新现场、对比文件及阈值边界见 [局部截面主材验证](docs/verification/2026-10-10-local-section-main-material.md)，导出范围见 [选择集验证](docs/verification/2026-10-10-selected-mainline-reexport-comparison.md)。最终结果以 `outputs/main-material-axis-20261010/delivery/` 为准；621 个未知角色不强行命中，证据不足的兼容路径保留原筛选条件。

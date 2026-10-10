@@ -9,6 +9,7 @@ from shapely.ops import polygonize, unary_union
 
 from ..box_section import classify_box_section_evidence
 from ..rules import as_float, parse_pl, text
+from .local_body_sections import local_box_wall_ids, local_h_plate_roles
 
 
 class SegmentContinuityLevel(str, Enum):
@@ -57,14 +58,18 @@ def classify_box_main_material_segment_groups(
 ) -> list[BoxMainMaterialSegmentGroup]:
     assembly_id = text(assembly.get("assemblyId"))
     parts = list(assembly.get("parts", []))
+    local_wall_ids = local_box_wall_ids(assembly, member)
     missing_evidence_count = sum(1 for part in parts if "mainMaterialEvidence" not in part)
     candidate_parts = sorted(
-        [_with_member_axis_projection(part, member) for part in parts if _is_candidate_part(part)],
+        [_with_member_axis_projection(part, member) for part in parts
+         if _is_candidate_part(part) or text(part.get("partId")) in local_wall_ids],
         key=lambda part: (_station_start(part), _station_end(part), text(part.get("partPosition")), text(part.get("partId"))),
     )
     relationship_edges = _relationship_edges(assembly)
     box_section_evidence = classify_box_section_evidence(assembly)
-    section_groups = _box_section_topology_seed_groups(assembly_id, assembly, candidate_parts, relationship_edges)
+    section_groups = _box_section_topology_seed_groups(
+        assembly_id, assembly, candidate_parts, relationship_edges, local_wall_ids,
+    )
     if not section_groups:
         section_groups = _section_sample_groups(assembly_id, candidate_parts, relationship_edges, member)
     if section_groups:
@@ -321,8 +326,9 @@ def _box_section_topology_seed_groups(
     assembly: dict[str, Any],
     candidate_parts: list[dict[str, Any]],
     relationship_edges: set[tuple[str, str]],
+    local_wall_ids: set[str] | None = None,
 ) -> list[BoxMainMaterialSegmentGroup]:
-    seed_ids = _box_section_topology_seed_part_ids(assembly, candidate_parts)
+    seed_ids = local_wall_ids or _box_section_topology_seed_part_ids(assembly, candidate_parts)
     if not seed_ids:
         return []
     role_parts = [part for part in candidate_parts if text(part.get("partId")) in seed_ids]
@@ -348,6 +354,9 @@ def _box_section_topology_seed_groups(
     evidence_summary = dict(group.evidence_summary)
     evidence_summary["section_role_hint"] = "box_section_topology"
     evidence_summary["box_section_seed_part_ids"] = ";".join(sorted(seed_ids))
+    if local_wall_ids:
+        evidence_codes.append("BOX_LOCAL_CAVITY_CORE_PARTS")
+        evidence_summary["section_role_hint"] = "local_cavity_core_parts"
     return [
         BoxMainMaterialSegmentGroup(
             assembly_id=group.assembly_id,
@@ -747,7 +756,12 @@ def classify_main_material_segment_groups(
     member: dict[str, Any] | None = None,
     confirmed_segment_positions: set[str] | None = None,
 ) -> list[BoxMainMaterialSegmentGroup]:
-    family = _infer_profile_family(assembly)
+    if local_box_wall_ids(assembly, member):
+        family = "BOX"
+    elif local_h_plate_roles(assembly):
+        family = "H"
+    else:
+        family = _infer_profile_family(assembly)
     if family in {"H", "GL", "BEAM"}:
         return _classify_h_or_gl_main_material_groups(assembly, family)
     return _with_role_summary(
@@ -1016,22 +1030,28 @@ def _h_gl_station_slice_main_plate_groups(
     station_axis_length = _station_span(all_stations)
     metadata_axis_length = as_float(assembly.get("metadata", {}).get("memberAxisEvidence", {}).get("length"))
     axis_length = max(station_axis_length, metadata_axis_length)
+    local_roles = local_h_plate_roles(assembly)
     groups: list[BoxMainMaterialSegmentGroup] = []
     for part_id, item in stats.items():
         stations = sorted(set(item["stations"]))
-        if len(stations) < 3:
+        if not local_roles and len(stations) < 3:
             continue
         span = _station_span(stations)
         coverage_ratio = span / axis_length if axis_length > 0 else 0.0
         role_hints = {text(role) for role in item["role_hints"]}
         if role_hints and role_hints.isdisjoint({"flange_candidate", "web_candidate"}):
             continue
-        if span < 1800.0 or coverage_ratio < 0.50:
+        if local_roles and part_id not in local_roles:
+            continue
+        if not local_roles and (span < 1800.0 or coverage_ratio < 0.50):
             continue
         part = parts_by_id.get(part_id, {"partId": part_id, "partPosition": item["part_position"]})
         group = _group_from_parts(assembly_id, [part], relationship_edges, 0)
         evidence_summary = dict(group.evidence_summary)
         evidence_summary["main_material_role"] = _h_gl_slice_role(role_hints)
+        if local_roles:
+            evidence_summary["main_material_role"] = local_roles[part_id].removeprefix("H_").removesuffix("_MAIN_PLATE")
+            evidence_summary["main_material_basis"] = "local_complete_h_section"
         evidence_summary["profile_family"] = family
         evidence_summary["main_material_source"] = "hBeamSectionEvidence.stationFrames"
         evidence_summary["slice_station_count"] = str(len(stations))

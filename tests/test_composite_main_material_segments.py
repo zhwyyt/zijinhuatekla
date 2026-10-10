@@ -184,8 +184,10 @@ class CompositeMainMaterialSegmentTests(unittest.TestCase):
         self.assertEqual("H_BOTTOM_FLANGE_MAIN_PLATE", roles["T2-3B-bottom-tail"])
         self.assertNotIn("T2-3B-top-short", roles)
         tail_plate = next(plate for plate in segments[0].main_plates if plate.part_position == "T2-3B-top-tail")
-        self.assertIn("h_beam_axis_continuity_expanded", tail_plate.secondary_evidence)
-        self.assertIn("H_GL_AXIS_CONTINUITY_EXPANDED", tail_plate.evidence_codes)
+        # A complete local frame now proves the short tail directly, without
+        # first failing an assembly-length gate and relying on expansion.
+        self.assertIn("local_complete_h_section", tail_plate.secondary_evidence)
+        self.assertIn("H_GL_STATION_SLICE_MAIN_PLATE", tail_plate.evidence_codes)
     def test_native_h_continuity_updates_segment_range_for_expanded_plates(self):
         assembly = _h_station_frame_fixture()
         assembly["metadata"]["memberAxisEvidence"]["length"] = 6200

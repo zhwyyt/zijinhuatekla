@@ -11,6 +11,7 @@ from ..adapters.normalized import normalized_part_from_bundle_part
 from ..classifiers.corbel_units import CorbelUnit, classify_corbel_units
 from ..classifiers.box_main_material_segments import classify_main_material_segment_groups
 from ..classifiers.box_part_spatial_relations import classify_box_part_spatial_relations
+from ..classifiers.local_body_sections import local_box_wall_ids, local_h_plate_roles, section_core_part_ids
 from ..geom.shop import classify_shop_shape
 from ..rules import as_float, norm_spec, text
 from ..spatial_features import (
@@ -218,9 +219,27 @@ def _section_topology_type(
 ) -> tuple[str | None, tuple[str, ...]]:
     samples = [sample for sample in member.get("Samples") or [] if isinstance(sample, Mapping)]
     signature_counts = {signature: 0 for signature in _SECTION_SIGNATURE_LABELS}
+    box_ids = local_box_wall_ids(dict(assembly), dict(member))
+    if box_ids:
+        box_ids = main_wall_part_ids_from_groups(
+            classify_main_material_segment_groups(dict(assembly), dict(member)),
+        )
+    h_ids = set(local_h_plate_roles(dict(assembly)))
+    local_types = ({"box"} if box_ids else set()) | ({"h"} if h_ids else set())
+    local_ids = box_ids | h_ids
+    partial_count = 0
     direct_profile_count = 0
     for sample in samples:
         signature, is_direct_profile = _section_sample_signature(sample)
+        core_ids = section_core_part_ids(sample)
+        partial_or_dense = signature == "plate" or (
+            sample.get("IsAbnormal") and sample.get("AbnormalReason") == "dense_attachment_zone"
+        )
+        if (partial_or_dense and signature is not None and signature not in local_types
+                and core_ids and core_ids <= local_ids):
+            # The same confirmed plates at an end or splice are not a new core.
+            partial_count += 1
+            signature = None
         direct_profile_count += int(is_direct_profile)
         if signature == "plate" and not (profile.startswith(("PL", "FLAT")) or is_plate_like):
             signature = None
@@ -230,13 +249,19 @@ def _section_topology_type(
     matched = tuple(
         signature
         for signature, count in signature_counts.items()
-        if count > 0
+        if count > 0 or signature in local_types
     )
     evidence = tuple(
         f"section.{signature}_signature:{signature_counts[signature]}/{len(samples)}"
         for signature in _SECTION_SIGNATURE_LABELS
         if signature_counts[signature] > 0
     )
+    if box_ids:
+        evidence += (f"section.local_box_core_parts:{len(box_ids)}",)
+    if h_ids:
+        evidence += (f"section.local_h_core_parts:{len(h_ids)}",)
+    if partial_count:
+        evidence += (f"section.same_core_partial_samples:{partial_count}",)
     if len(matched) > 1:
         return "UNKNOWN", ("section.conflict",) + evidence
     if len(matched) == 1:

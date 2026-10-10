@@ -5,6 +5,8 @@ from enum import Enum
 from typing import Any
 import re
 
+from .local_body_sections import local_h_plate_roles
+
 
 class CompositeSegmentType(str, Enum):
     CROSS_CORE_WITH_FLANGES = "CROSS_CORE_WITH_FLANGES"
@@ -142,22 +144,26 @@ def _h_station_frame_segments(assembly: dict[str, Any]) -> list[CompositeMainMat
             if not item["part_position"]:
                 item["part_position"] = str(part_slice.get("partPosition") or "")
     axis_length = max(_station_span(all_stations), _member_axis_length(assembly))
+    local_roles = local_h_plate_roles(assembly)
     parts_by_id = {str(part.get("partId") or ""): part for part in assembly.get("parts", []) if str(part.get("partId") or "")}
     plates_by_id: dict[str, CompositeMainPlate] = {}
     seed_roles: dict[str, CompositePrimaryRole] = {}
     accepted_stations: list[float] = []
     for part_id, item in stats.items():
         stations = sorted(set(item["stations"]))
-        if len(stations) < 3:
+        if not local_roles and len(stations) < 3:
             continue
         span = _station_span(stations)
         coverage_ratio = span / axis_length if axis_length > 0 else 0.0
         role_hints = {str(role) for role in item["role_hints"]}
         if role_hints and role_hints.isdisjoint({"flange_candidate", "web_candidate"}):
             continue
-        if span < 1800.0 or coverage_ratio < 0.50:
+        if local_roles and part_id not in local_roles:
             continue
-        primary_role = _h_native_primary_role(item["role_votes"], role_hints)
+        if not local_roles and (span < 1800.0 or coverage_ratio < 0.50):
+            continue
+        primary_role = (CompositePrimaryRole(local_roles[part_id]) if local_roles
+                        else _h_native_primary_role(item["role_votes"], role_hints))
         if primary_role is None:
             continue
         part = parts_by_id.get(part_id, {})
@@ -168,6 +174,7 @@ def _h_station_frame_segments(assembly: dict[str, Any]) -> list[CompositeMainMat
             primary_role=primary_role,
             secondary_evidence=[
                 "h_beam_station_frame",
+                *(["local_complete_h_section"] if local_roles else []),
                 f"slice_station_count={len(stations)}",
                 f"slice_station_span={span:.3f}",
                 f"slice_axis_coverage_ratio={coverage_ratio:.3f}",
@@ -183,7 +190,10 @@ def _h_station_frame_segments(assembly: dict[str, Any]) -> list[CompositeMainMat
     plates = list(plates_by_id.values())
     plate_parts = [parts_by_id[plate.part_id] for plate in plates if plate.part_id in parts_by_id]
     station_start = min([_station_start(part) for part in plate_parts] + accepted_stations) if plate_parts or accepted_stations else 0.0
-    station_end = max([_station_end(part) for part in plate_parts] + accepted_stations + [axis_length]) if plate_parts or accepted_stations else axis_length
+    range_ends = [_station_end(part) for part in plate_parts] + accepted_stations
+    if not local_roles:
+        range_ends.append(axis_length)
+    station_end = max(range_ends) if range_ends else axis_length
     return [
         CompositeMainMaterialSegment(
             assembly_id=str(assembly.get("assemblyId", "")),

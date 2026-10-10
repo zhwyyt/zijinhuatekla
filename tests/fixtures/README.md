@@ -6,5 +6,6 @@
 - 保留确认主体壁板、完整牛腿聚类和主件，共 37 / 31 个零件；内部联系只保留两端都入选的事实。
 - 保留几何、轴向投影、5 个截面、法向投影、根连接和外部螺栓连接端点。外部 ID 改为 EXT1…，不把裁掉的内部件伪装为外部连接。
 - 外部 boltHoles 端点是聚类判为 Bracket 的必要证据；最初裁剪漏掉该字段使牛腿归零。回归同时验证删除该证据后保持 0，不能按期望数量强补。
+- 主材适配回归补回原有 5 个 member Samples 的截面特征、异常原因和已保留零件的角色，ID 使用同一匿名映射。封闭空腔与密集附属区的假十字冲突现在也在正式入口回归中覆盖，期望 BOX；不修改原始计数或人工标签。
 
 验证：`python -m unittest discover -s tests -p test_segmented_box_corbel_regression.py`。原始证据与完整实例复算说明见 `docs/verification/2026-10-10-gkz-corbel-regression.md`。

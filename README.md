@@ -41,7 +41,7 @@ python -m zijinhua_tekla.cli export-excel --root <导出目录> --project-name <
 
 同号构件可以有多个装配实例；批量识别优先按装配 ID 读取 `members/batch_summary.json` 中的完整快照，不能把最后写入的同号 member 文件用于其它实例。旧数据没有完整快照且实例身份不一致时，进入 `识别失败`，不自动替代。单构件指定 `--assembly-id` 时使用同一装配身份校验。
 
-分段 BOX 的主体识别消费各段截面外壁证据，长度门槛以局部壁板跨度为参照，不能把短壁板与整根组合体轴长直接比较；原生型钢主体保留原口径。已验收牛腿数量及单元身份的回归见 [GKZ 修复验证](docs/verification/2026-10-10-gkz-corbel-regression.md)。
+主材优先消费新主轴下的局部截面证据：BOX 使用闭合空腔及核心壁板身份，H 使用不同站位重复的完整上翼缘、腹板、下翼缘切片，并关联主件。完整证据确认的短分段不受旧绝对长度或整轴占比门槛否决；真实截面冲突保留 UNKNOWN。证据不足的兼容路径仍保留原筛选条件，原生型钢主件不由附属板重新定义。验证范围及待人工确认的新结果见 [局部截面主材验证](docs/verification/2026-10-10-local-section-main-material.md)。
 
 单构件兼容入口仍保留 `emit-excel`、`analyze`、`compare`；真实加工清单只作对照，不反馈修改模型识别标签。默认不生成图纸。
 
