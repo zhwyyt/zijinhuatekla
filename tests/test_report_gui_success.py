@@ -1,48 +1,40 @@
 import unittest
 from unittest import mock
 
+from PySide6.QtWidgets import QApplication
+
 from zijinhua_tekla.gui.report_gui import ReportGUI
 from zijinhua_tekla.reports.combined import CombinedExcelResult
+
+
+APP = QApplication.instance() or QApplication([])
 
 
 class ReportGuiSuccessTests(unittest.TestCase):
     def test_successful_excel_generation_shows_popup(self):
         app = ReportGUI()
-        app.update_idletasks()
-        result = CombinedExcelResult(
-            path=None,
-            assembly_count=1,
-            feature_row_count=2,
-            complexity_row_count=1,
-            errors=[],
-            role_row_count=1,
-        )
-
+        app.active_kind = "offline"
         try:
-            with mock.patch(
-                "zijinhua_tekla.gui.report_gui.messagebox.showinfo"
-            ) as show_info:
-                app._messages.put({"kind": "success", "result": result})
-                app._poll_messages()
-
-            show_info.assert_called_once()
-            self.assertIn("构件角色 1 行", show_info.call_args.args[1])
+            result = CombinedExcelResult(None, 1, 2, 1, role_row_count=1)
+            with mock.patch("zijinhua_tekla.gui.report_gui.QMessageBox.information") as popup:
+                app._show_success(result)
+            self.assertIn("构件角色 1 行", popup.call_args.args[2])
         finally:
-            app.destroy()
+            app.close()
 
-    def test_old_axis_cache_shows_a_reexport_warning(self):
+    def test_partial_failure_and_axis_review_are_both_shown(self):
         app = ReportGUI()
-        result = CombinedExcelResult(None, 1, 2, 1, role_row_count=1, axis_review_count=1)
+        app.active_kind = "offline"
         try:
-            with mock.patch("zijinhua_tekla.gui.report_gui.messagebox.showinfo"), mock.patch(
-                "zijinhua_tekla.gui.report_gui.messagebox.showwarning"
-            ) as warning:
-                app._messages.put({"kind": "success", "result": result})
-                app._poll_messages()
-            warning.assert_called_once()
-            self.assertIn("重新导出", warning.call_args.args[0])
+            result = CombinedExcelResult(None, 2, 2, 1, errors=[{"error": "缺快照"}], role_row_count=1, axis_review_count=1)
+            with mock.patch("zijinhua_tekla.gui.report_gui.QMessageBox.warning") as warning:
+                app._show_success(result)
+            message = warning.call_args.args[2]
+            self.assertIn("识别失败", message)
+            self.assertIn("重新导出", message)
+            self.assertIn("失败 1 个", message)
         finally:
-            app.destroy()
+            app.close()
 
 
 if __name__ == "__main__":

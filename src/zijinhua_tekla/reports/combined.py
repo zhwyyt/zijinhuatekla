@@ -7,7 +7,7 @@ from collections import Counter
 import json
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -65,7 +65,10 @@ def export_combined_excel(
     project_name: str,
     project_area: str,
     output_dir: Path | str | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
 ) -> CombinedExcelResult:
+    if progress:
+        progress(0, 0, "正在读取数据集与构件快照…")
     source = inspect_export_root(export_root)
     if not source["bundle_found"]:
         raise FileNotFoundError(f"未找到 Tekla 导出包：{source['bundle_path']}")
@@ -88,7 +91,7 @@ def export_combined_excel(
     successful_assemblies: list[dict[str, Any]] = []
     axis_review_count = 0
     errors: list[dict[str, str]] = []
-    for assembly in assemblies:
+    for index, assembly in enumerate(assemblies, 1):
         member_id = text((assembly.get("metadata") or {}).get("assemblyPosition"))
         try:
             member = load_member(
@@ -113,6 +116,10 @@ def export_combined_excel(
                     "error": str(exc),
                 }
             )
+            if progress:
+                progress(index, len(assemblies), f"[错误] {member_id} / {assembly.get('assemblyId')}：{exc}")
+        if progress:
+            progress(index, len(assemblies), f"已处理 {index}/{len(assemblies)}：{member_id}")
 
     if not complexity_rows:
         raise ValueError(f"没有可导出的构件复杂度数据；失败 {len(errors)} 个")
@@ -126,6 +133,8 @@ def export_combined_excel(
         columns=MEMBER_COMPLEXITY_COLUMNS,
     )
     reviews = connection_review_candidates(successful_assemblies)
+    if progress:
+        progress(len(assemblies), len(assemblies), "正在写入 Excel，请等待保存完成…")
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         pd.DataFrame(role_rows, columns=MEMBER_ROLE_COLUMNS).to_excel(
             writer, index=False, sheet_name=ROLE_SHEET_NAME,

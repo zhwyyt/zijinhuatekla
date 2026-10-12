@@ -11,13 +11,15 @@ python -m pip install -e .
 python -m unittest discover -s tests
 ```
 
-桌面入口：
+Qt6 桌面入口（2026-10-12 用户确认验收通过）：
 
 ```powershell
 python -m zijinhua_tekla.cli gui
 ```
 
-GUI 模式1从已打开的 Tekla 模型导出当前选择集；模式2选择导出目录或 bundle，输入项目名称、工程区域后生成单个 Excel。批量命令与 GUI 共用同一报告函数：
+单文件程序位于本地 `dist/ZijinhuaTekla/ZijinhuaTekla.exe`，无需单独安装 Python 或 Qt。模块1从已打开的 Tekla 2017 模型导出当前选择集，保存到所选目录下的独立数据集；模块2选择导出目录或 bundle，输入项目名称、工程区域及结果目录后生成 Excel。两模块均在后台运行，显示日志、进度与错误提示。操作前提和构建命令见 [桌面版使用说明](docs/desktop-user-guide.md)，验收记录见 [Qt6 交付验证](docs/verification/2026-10-12-qt6-desktop-acceptance.md)。
+
+批量命令与 GUI 共用同一报告函数：
 
 ```powershell
 python -m zijinhua_tekla.cli export-excel --root <导出目录> --project-name <项目名称> --project-area <工程区域> --out outputs
