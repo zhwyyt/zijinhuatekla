@@ -10,15 +10,29 @@
 - 验证记录写入 `docs/verification/`，聊天只汇报结论和关键路径。
 - `src/zijinhua_tekla/` 放可复用识别代码；`tests/` 放对应单元测试。
 - 不把一次性分析脚本直接当生产逻辑；先抽出规则，再接入导出数据或 Tekla MCP。
+- 不默认调用 superpowers，只有用户明确要求时才调用。
+- 文档沿用 `STATUS.md + TASKLIST.md`；旧状态和已完成任务归档到 `docs/verification/`，不另建第二套活文档。
 
 ## 当前重点
 
-第一阶段先支持“已深化构件识别到真实加工/配送口径”的离线 JSON/Excel 对齐：
+2026-10-14：主目录 `I:\zijinhuatekla` 已切换为 `codex/offline-part-drawing-engine`，当前工作是平板零件离线出图。
 
-- 构件级：梁/柱/埋件等构件类型。
-- 主材级：箱型柱主壁板、BH 型钢、拆板派生件。
-- 零件级：零件角色、加工尺寸、工序、形状、配送用途。
-- 关系级：焊接、螺栓、接触、空间关系，后续服务于组立/装焊顺序。
+- 最小读取集：`STATUS.md`、`TASKLIST.md`、`docs/design/2026-07-13-part-drawing-offline-architecture.md`；几何证据问题再读 `docs/design/2026-07-14-part-drawing-v2-geometry-evidence-and-annotations.md`。
+- 正式入口：CLI `draw-parts` → `part_drawing.pipeline.run_part_drawing_batch`；消费 `partDrawingSnapshot.v1/v2`，输出 DXF、PDF 和 drawing JSON。
+- 先稳定平板零件图，再扩展构件工序图。折弯板、曲面板和型材仍由质量门阻断自动出图；`OK` 不等于生产放行。
+- 识别主线保留在 `feat/recognition-mainline`（已验收基线 `635cdd9`），不把该分支代码或旧 main 混入出图工作。
+- 本地 `main` 保留旧出图基线 `7a9fb37`，不是当前开发入口；未经明确要求不移动或推送 main。
+- 旧目录 `I:\tmp\zijinhuatekla-part-drawing-engine` 保留为 detached HEAD `7a9fb37` 历史现场；继续开发使用主目录，不重复检出同一分支。
+- 不删除或搬动根目录 CAD/Excel、cache、outputs、dist；它们是忽略的本地资料，不代表待提交文件。
+
+## Git 与文档收尾
+
+- 改动前核对 `git status --short --branch` 和 `git worktree list`。仅暂存本次明确文件，不把本地资料全量加入索引。
+- 提交标题使用 `<type>: <summary>`；默认由全局 Stop hook 收尾，用户明确要求提交/推送时可在会话中执行并核验。
+- 推送后核对当前 HEAD 与远端分支 SHA，以及 ahead/behind；工作区干净不代表已有提交已推送。
+- 全局 `check-docs.ps1` 对本项目返回豁免，不构成内容审核通过。收尾必须核对 README 与实际契约/入口一致、STATUS 只写现状与验证、TASKLIST 只保留当前未完成任务、引用存在。
+- 文档/忽略规则整理运行 `git diff --check` 和引用检查；代码变更运行相关测试，发布出图基线前运行 `python -m unittest discover -s tests`。测试时确认导入来自当前 `src`。
+- 每轮验证写入 `docs/verification/`，区分本轮实测与历史验收；STATUS 下一步不超过三条。共享全局 hook 配置不随本项目文档整理修改。
 
 ## 防规则堆砌规则
 
